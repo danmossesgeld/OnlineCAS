@@ -19,7 +19,7 @@
     { label: 'Status', key: 'status' }
   ];
 
-  let collectionPath = 'customers';
+  let collectionPath = 'masterlist/customers';
   let showModal = false;
   let errorMsg = '';
   let formData = { code: '', name: '', type: '', status: '' };

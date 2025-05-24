@@ -16,9 +16,12 @@
     row?: string | number;
   }> = [];
   export let formData: Record<string, any> = {};
+  export let disabled = false; // Add disabled prop for view mode
 
   function handleInput(e: Event, name: string) {
-    formData = { ...formData, [name]: (e.target as HTMLInputElement).value };
+    if (!disabled) {
+      formData = { ...formData, [name]: (e.target as HTMLInputElement).value };
+    }
   }
 
   // Group fields by row property or by index in sets of 3
@@ -51,25 +54,60 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4 w-full">
       {#each rowFields as field}
         <div class={(field.class ?? '') + ' w-full'}>
-          <label class="block mb-1 text-sm font-medium text-gray-700">{field.label}</label>
+          <label for={`field-${field.name}`} class="block mb-1 text-sm font-medium text-gray-700">{field.label}</label>
           {#if field.type === 'select'}
-            <select class="select select-bordered select-xs w-full border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary bg-white rounded-md px-3 py-2" bind:value={formData[field.name]} required={field.required}>
+            <select 
+              id={`field-${field.name}`}
+              class="select select-bordered select-xs w-full border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary {disabled ? 'bg-gray-50' : 'bg-white'} rounded-md px-3 py-2" 
+              bind:value={formData[field.name]} 
+              required={field.required}
+              {disabled}
+            >
               <option value="" disabled selected>{field.placeholder ?? 'Select'}</option>
               {#each field.options ?? [] as opt}
                 <option value={opt.value}>{opt.label}</option>
               {/each}
             </select>
           {:else if field.type === 'date'}
-            <input class="input input-bordered input-xs w-full border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary bg-white rounded-md px-3 py-2" type="date" placeholder={field.placeholder} bind:value={formData[field.name]} required={field.required} />
+            <input 
+              id={`field-${field.name}`}
+              class="input input-bordered input-xs w-full border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary {disabled ? 'bg-gray-50' : 'bg-white'} rounded-md px-3 py-2" 
+              type="date" 
+              placeholder={field.placeholder} 
+              bind:value={formData[field.name]} 
+              required={field.required}
+              {disabled} 
+            />
           {:else if field.type === 'textarea'}
-            <textarea class="textarea textarea-bordered textarea-xs w-full border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary bg-white rounded-md px-3 py-2" placeholder={field.placeholder} bind:value={formData[field.name]} required={field.required}></textarea>
+            <textarea 
+              id={`field-${field.name}`}
+              class="textarea textarea-bordered textarea-xs w-full border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary {disabled ? 'bg-gray-50' : 'bg-white'} rounded-md px-3 py-2" 
+              placeholder={field.placeholder} 
+              bind:value={formData[field.name]} 
+              required={field.required}
+              {disabled}
+            ></textarea>
           {:else if field.type === 'checkbox'}
             <div class="form-control flex items-center gap-2 mb-2">
-              <input type="checkbox" class="checkbox checkbox-sm" bind:checked={formData[field.name]} />
-              <span class="label-text text-xs text-gray-700">{field.label}</span>
+              <input 
+                id={`field-${field.name}`}
+                type="checkbox" 
+                class="checkbox checkbox-sm" 
+                bind:checked={formData[field.name]}
+                {disabled} 
+              />
+              <label for={`field-${field.name}`} class="label-text text-xs text-gray-700">{field.label}</label>
             </div>
           {:else}
-            <input class="input input-bordered input-xs w-full border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary bg-white rounded-md px-3 py-2" type={field.type ?? 'text'} placeholder={field.placeholder} bind:value={formData[field.name]} required={field.required} />
+            <input 
+              id={`field-${field.name}`}
+              class="input input-bordered input-xs w-full border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary {disabled ? 'bg-gray-50' : 'bg-white'} rounded-md px-3 py-2" 
+              type={field.type ?? 'text'} 
+              placeholder={field.placeholder} 
+              bind:value={formData[field.name]} 
+              required={field.required}
+              {disabled} 
+            />
           {/if}
         </div>
       {/each}

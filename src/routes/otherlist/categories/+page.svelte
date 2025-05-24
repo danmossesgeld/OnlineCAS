@@ -3,6 +3,7 @@
   import ListButtons from '$lib/components/ListButtons.svelte';
   import ModalForm from '$lib/components/ModalForm.svelte';
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { collectionStore } from '$lib/utils/firestoreStores';
 
   // Config for form fields
   $: categoryFields = [
@@ -13,7 +14,10 @@
     { label: 'Name', key: 'name' }
   ];
 
-  let collectionPath = 'categories';
+  let parentCollection = 'otherlist';
+  let subCollectionName = 'categories';
+  let collectionPath = 'otherlist/categories';  // Consistent with Firestore structure
+
   let showModal = false;
   let errorMsg = '';
   let formData = { name: '' };
@@ -72,19 +76,21 @@
       }
     }
   }
+
+  const items = collectionStore(parentCollection, subCollectionName);
 </script>
 
 <div class="bg-white rounded-2xl shadow-xl p-8">
-  <h1 class="text-2xl font-bold mb-2 flex items-center gap-2"><iconify-icon icon="material-symbols:local-offer-rounded" width="28" height="28" /> Categories</h1>
+  <h1 class="text-2xl font-bold mb-2 flex items-center gap-2"><iconify-icon icon="material-symbols:local-offer-rounded" width="28" height="28"></iconify-icon> Categories</h1>
   <div class="flex flex-row gap-2 mb-4 items-center">
     <div class="ml-auto">
       <ListButtons {buttons} />
     </div>
   </div>
-  <FireTable {collectionPath} {columns} queryOptions={[]}>
+  <FireTable collectionPath={collectionPath} {columns} queryOptions={[]}>
     <svelte:fragment slot="actions" let:row>
-      <button class="btn btn-ghost btn-xs" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
-      <button class="btn btn-ghost btn-xs" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
+      <button class="btn btn-ghost btn-xs" aria-label="Edit category" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
+      <button class="btn btn-ghost btn-xs" aria-label="Delete category" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
     </svelte:fragment>
   </FireTable>
 

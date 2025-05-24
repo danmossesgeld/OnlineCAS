@@ -4,6 +4,17 @@
   import ModalForm from '$lib/components/ModalForm.svelte';
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
   import { categoryOptions, unitOptions } from '$lib/utils/optionStores';
+  // Import to check if data is loaded properly
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  let loaded = false;
+
+  onMount(() => {
+    // Mark as loaded when component is mounted
+    loaded = true;
+    // Additional logging for troubleshooting
+    console.log('Component mounted, current route:', $page.url.pathname);
+  });
 
   // Config for form fields
   $: itemFields = [
@@ -28,7 +39,11 @@
     { label: 'Status', key: 'status' }
   ];
 
-  let collectionPath = 'items';
+  // Create separate parts for parent collection and subcollection to avoid path issues
+  let parentCollection = 'masterlist';  // This will be mapped to listdatabase/masterlist in the CRUD utilities
+  let subCollectionName = 'items';
+  // We'll use these separately rather than as a combined path
+  let collectionPath = 'masterlist/items';  // This will be mapped to listdatabase/masterlist/items
   let showModal = false;
   let errorMsg = '';
   let formData = { code: '', name: '', type: '', category: '', unit: '', price: '', cost: '', status: '' };
@@ -61,9 +76,11 @@
     };
     try {
       if (editingItem) {
+        // Use the collectionPath approach with the updated utils
         await updateDocInCollection(collectionPath, editingItem.id, dataToSave);
         editingItem = null;
       } else {
+        // Use the collectionPath approach with the updated utils
         await addDocToCollection(collectionPath, dataToSave);
       }
       showModal = false;
@@ -90,6 +107,7 @@
   async function handleDelete(item: any) {
     if (confirm(`Are you sure you want to delete ${item.name}?`)) {
       try {
+        // Use the collectionPath approach with the updated utils
         await deleteDocFromCollection(collectionPath, item.id);
       } catch (e) {
         alert('Failed to delete: ' + (e as Error).message);
@@ -106,10 +124,10 @@
       <ListButtons {buttons} />
     </div>
   </div>
-  <FireTable {collectionPath} {columns} queryOptions={[]}>
+  <FireTable collectionPath="masterlist/items" {columns} queryOptions={[]}>
     <svelte:fragment slot="actions" let:row>
-      <button class="btn btn-ghost btn-xs" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
-      <button class="btn btn-ghost btn-xs" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
+      <button class="btn btn-ghost btn-xs" aria-label="Edit item" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
+      <button class="btn btn-ghost btn-xs" aria-label="Delete item" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
     </svelte:fragment>
   </FireTable>
 
