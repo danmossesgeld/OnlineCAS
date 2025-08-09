@@ -1,9 +1,7 @@
 <script lang="ts">
-  import FireTable from '$lib/components/FireTable.svelte';
-  import ListButtons from '$lib/components/ListButtons.svelte';
+  import MasterListContainer from '$lib/components/MasterListContainer.svelte';
   import ModalForm from '$lib/components/ModalForm.svelte';
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
-  import { collectionStore } from '$lib/utils/firestoreStores';
 
   // Config for form fields
   $: categoryFields = [
@@ -14,16 +12,33 @@
     { label: 'Name', key: 'name' }
   ];
 
-  let parentCollection = 'otherlist';
-  let subCollectionName = 'categories';
-  let collectionPath = 'otherlist/categories';  // Consistent with Firestore structure
+  // Collection paths
+  const rootCollection = 'listdatabase';
+  const parentCollection = 'otherlist';
+  const subCollectionName = 'categories';
+  const collectionPath = 'otherlist/categories';  // Consistent with Firestore structure
+  
+  // ListContainer configuration
+  const documentType = 'category';
+  const title = 'Categories';
+  const subtitle = 'Manage categories for items and transactions';
+  const primaryColorClass = 'green';
 
   let showModal = false;
   let errorMsg = '';
   let formData = { name: '' };
   let editingItem: { id: string, name: string } | null = null;
 
-  const buttons = [
+  // Define button type to match the structure we need
+  type Button = {
+    label: string;
+    color: string;
+    icon?: string;
+    onClick: () => void;
+    class?: string;
+  };
+
+  const buttons: Button[] = [
     {
       label: 'New Category',
       color: 'primary',
@@ -77,22 +92,29 @@
     }
   }
 
-  const items = collectionStore(parentCollection, subCollectionName);
+  // No need to create a collection store since MasterListContainer handles data loading
 </script>
 
 <div class="bg-white rounded-2xl shadow-xl p-8">
-  <h1 class="text-2xl font-bold mb-2 flex items-center gap-2"><iconify-icon icon="material-symbols:local-offer-rounded" width="28" height="28"></iconify-icon> Categories</h1>
-  <div class="flex flex-row gap-2 mb-4 items-center">
-    <div class="ml-auto">
-      <ListButtons {buttons} />
-    </div>
-  </div>
-  <FireTable collectionPath={collectionPath} {columns} queryOptions={[]}>
-    <svelte:fragment slot="actions" let:row>
+  <MasterListContainer
+    {rootCollection}
+    {parentCollection}
+    {subCollectionName}
+    {documentType}
+    {title}
+    {subtitle}
+    {primaryColorClass}
+    {columns}
+    {buttons}
+    queryOptions={[]}
+    defaultButtons={false}
+    allowDelete={false}
+  >
+    <svelte:fragment slot="additionalActions" let:row>
       <button class="btn btn-ghost btn-xs" aria-label="Edit category" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
       <button class="btn btn-ghost btn-xs" aria-label="Delete category" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
     </svelte:fragment>
-  </FireTable>
+  </MasterListContainer>
 
   {#if showModal}
     <ModalForm

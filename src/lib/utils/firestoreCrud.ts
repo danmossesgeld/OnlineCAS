@@ -1,4 +1,4 @@
-import { getFirestore, collection, addDoc, doc, setDoc, deleteDoc, getDoc, type CollectionReference, type DocumentReference } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, setDoc, deleteDoc, getDoc, getDocs, query, where, type CollectionReference, type DocumentReference, type WhereFilterOp } from 'firebase/firestore';
 import { app } from './firebase';
 
 // Root collection mapping for different data categories
@@ -6,7 +6,8 @@ const ROOT_COLLECTION_MAP: Record<string, string> = {
   'masterlist': 'listdatabase',
   'otherlist': 'listdatabase',
   'customerCenter': 'transactions',
-  'vendorCenter': 'transactions'
+  'vendorCenter': 'transactions',
+  'accounting': 'transactions'
 };
 
 /**
@@ -247,4 +248,68 @@ export async function getDocFromCollection(collectionPath: string, idOrSubCollec
   const docRef = doc(db, collectionPath, id);
   const docSnap = await getDoc(docRef);
   return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
+}
+
+/**
+ * Filter condition for Firestore queries
+ */
+export interface FilterCondition {
+  field: string;
+  operator: WhereFilterOp;
+  value: any;
+}
+
+/**
+ * Query a Firestore collection with optional filter conditions
+ * @param collectionPath - The collection path or root collection name
+ * @param filters - Array of filter conditions to apply to the query
+ * @returns Promise with an array of document data
+ */
+export async function queryCollectionDocs(collectionPath: string, filters: FilterCondition[] = []) {
+  const db = getFirestore(app);
+  let colRef;
+  const segments = collectionPath.split('/');
+  
+  // Handle different path formats
+  if (segments.length === 1) {
+    // Simple collection
+    colRef = collection(db, collectionPath);
+  } else if (segments.length === 2) {
+    // Handle 'parentCollection/subCollection' format
+    const [parentCollection, subCollectionName] = segments;
+    const rootCollection = getRootCollection(parentCollection);
+    const rootColRef = collection(db, rootCollection);
+    const parentDocRef = doc(rootColRef, parentCollection);
+    colRef = collection(parentDocRef, subCollectionName);
+  } else if (segments.length === 3) {
+    // Handle 'rootCollection/parentCollection/subCollection' format
+    const [rootCollection, parentCollection, subCollectionName] = segments;
+    const rootColRef = collection(db, rootCollection);
+    const parentDocRef = doc(rootColRef, parentCollection);
+    colRef = collection(parentDocRef, subCollectionName);
+  } else {
+    throw new Error(`Invalid collection path format: ${collectionPath}`);
+  }
+  
+  try {
+    // Create a query with all filter conditions
+    let q = query(colRef);
+    
+    // Apply each filter condition
+    if (filters && filters.length > 0) {
+      const whereConditions = filters.map(filter => 
+        where(filter.field, filter.operator, filter.value)
+      );
+      q = query(colRef, ...whereConditions);
+    }
+    
+    // Execute the query
+    const querySnapshot = await getDocs(q);
+    
+    // Convert query results to array of objects with id and data
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error querying collection:', error);
+    return [];
+  }
 }

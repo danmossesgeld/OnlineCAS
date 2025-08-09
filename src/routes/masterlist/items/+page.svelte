@@ -1,13 +1,28 @@
 <script lang="ts">
-  import FireTable from '$lib/components/FireTable.svelte';
-  import ListButtons from '$lib/components/ListButtons.svelte';
   import ModalForm from '$lib/components/ModalForm.svelte';
+  import MasterListContainer from '$lib/components/MasterListContainer.svelte';
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
   import { categoryOptions, unitOptions } from '$lib/utils/optionStores';
-  // Import to check if data is loaded properly
+  import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   let loaded = false;
+
+  // Get accounts for select fields filtered by type
+  const accountsStore = createFirestoreOptionsStore('masterlist/accounts', 'name', 'id', true);
+  
+  // Derived stores for filtered account types
+  $: incomeAccounts = $accountsStore.filter(acc => acc.raw?.accountType === 'revenue')
+    .map(acc => ({ label: `${acc.raw?.code || ''} - ${acc.label}`, value: acc.value }));
+  
+  $: expenseAccounts = $accountsStore.filter(acc => acc.raw?.accountType === 'expense')
+    .map(acc => ({ label: `${acc.raw?.code || ''} - ${acc.label}`, value: acc.value }));
+
+  $: inventoryAccounts = $accountsStore.filter(acc => acc.raw?.accountType === 'asset')
+    .map(acc => ({ label: `${acc.raw?.code || ''} - ${acc.label}`, value: acc.value }));
+
+  $: cogsAccounts = $accountsStore.filter(acc => acc.raw?.accountType === 'cogs' || acc.raw?.accountType === 'expense')
+    .map(acc => ({ label: `${acc.raw?.code || ''} - ${acc.label}`, value: acc.value }));
 
   onMount(() => {
     // Mark as loaded when component is mounted
@@ -20,43 +35,114 @@
   $: itemFields = [
     { label: 'Code*', name: 'code', type: 'text', required: true },
     { label: 'Name*', name: 'name', type: 'text', required: true },
-    { label: 'Type', name: 'type', type: 'text' },
+    { label: 'Description', name: 'description', type: 'textarea' },
     { label: 'Category', name: 'category', type: 'select', options: $categoryOptions },
-    { label: 'Unit', name: 'unit', type: 'select', options: $unitOptions },
-    { label: 'Price', name: 'price', type: 'number' },
-    { label: 'Cost', name: 'cost', type: 'number' },
-    { label: 'Status', name: 'status', type: 'text' }
+    { label: 'Unit', name: 'unit_id', type: 'select', options: $unitOptions },
+    
+    // Inventory settings
+    { label: 'Is Inventory Item', name: 'is_inventory', type: 'checkbox', default: false },
+    { label: 'Is Sellable', name: 'is_sellable', type: 'checkbox', default: true },
+    { label: 'Is Purchasable', name: 'is_purchasable', type: 'checkbox', default: true },
+    
+    // Price fields
+    { label: 'Sales Price', name: 'sales_price', type: 'number' },
+    { label: 'Purchase Price', name: 'purchase_price', type: 'number' },
+    
+    // Account linkage fields
+    { label: 'Income Account', name: 'income_account_id', type: 'select', options: incomeAccounts },
+    { label: 'Expense Account', name: 'expense_account_id', type: 'select', options: expenseAccounts },
+    { label: 'Inventory Account', name: 'inventory_account_id', type: 'select', options: inventoryAccounts },
+    { label: 'COGS Account', name: 'cogs_account_id', type: 'select', options: cogsAccounts },
+    
+    // Other fields
+    { label: 'Average Cost', name: 'average_cost', type: 'number', readonly: true, default: 0 },
+    { label: 'Active', name: 'is_active', type: 'checkbox', default: true }
   ];
 
   const columns = [
     { label: 'Code', key: 'code' },
     { label: 'Name', key: 'name' },
-    { label: 'Type', key: 'type' },
     { label: 'Category', key: 'category' },
-    { label: 'Unit', key: 'unit' },
-    { label: 'Price', key: 'price' },
-    { label: 'Cost', key: 'cost' },
-    { label: 'Status', key: 'status' }
+    { label: 'Unit', key: 'unit_id' },
+    { label: 'Sales Price', key: 'sales_price', format: (value: number) => value ? `₱${value.toFixed(2)}` : '' },
+    { label: 'Type', key: 'is_inventory', format: (value: boolean) => value ? 'Inventory' : 'Non-inventory' },
+    { label: 'Status', key: 'is_active', format: (value: boolean) => value ? 'Active' : 'Inactive' }
   ];
 
-  // Create separate parts for parent collection and subcollection to avoid path issues
-  let parentCollection = 'masterlist';  // This will be mapped to listdatabase/masterlist in the CRUD utilities
-  let subCollectionName = 'items';
-  // We'll use these separately rather than as a combined path
-  let collectionPath = 'masterlist/items';  // This will be mapped to listdatabase/masterlist/items
+  // Collection paths
+  const rootCollection = 'listdatabase';
+  const parentCollection = 'masterlist';
+  const subCollectionName = 'items';
+  const collectionPath = 'masterlist/items';  // This will be mapped to listdatabase/masterlist/items
+
+  // UI state
   let showModal = false;
   let errorMsg = '';
-  let formData = { code: '', name: '', type: '', category: '', unit: '', price: '', cost: '', status: '' };
+  let formData = {
+    code: '',
+    name: '',
+    description: '',
+    category: '',
+    unit_id: '',
+    is_inventory: false,
+    is_sellable: true,
+    is_purchasable: true,
+    sales_price: '',
+    purchase_price: '',
+    income_account_id: '',
+    expense_account_id: '',
+    inventory_account_id: '',
+    cogs_account_id: '',
+    average_cost: 0,
+    is_active: true
+  };
   let editingItem: { id: string } | null = null;
 
+  // ListContainer configuration
+  const documentType = 'item';
+  const title = 'Item Masterlist';
+  const subtitle = 'Manage your inventory and non-inventory items';
+  const primaryColorClass = 'blue';
+  const totalLabel = 'Total Items';
+  // Setting these to empty strings will hide the respective cards
+  const postedLabel = '';
+  const draftLabel = '';
+  const pendingLabel = '';
+  const overdueLabel = '';
+
+  // Action buttons
   const buttons = [
     {
       label: 'New Item',
       color: 'primary',
       icon: 'material-symbols:add',
-      onClick: () => { showModal = true; editingItem = null; formData = { code: '', name: '', type: '', category: '', unit: '', price: '', cost: '', status: '' }; errorMsg = ''; }
+      onClick: handleAdd
     }
   ];
+
+  function handleAdd() {
+    formData = {
+      code: '',
+      name: '',
+      description: '',
+      category: '',
+      unit_id: '',
+      is_inventory: false,
+      is_sellable: true,
+      is_purchasable: true,
+      sales_price: '',
+      purchase_price: '',
+      income_account_id: '',
+      expense_account_id: '',
+      inventory_account_id: '',
+      cogs_account_id: '',
+      average_cost: 0,
+      is_active: true
+    };
+    editingItem = null;
+    showModal = true;
+    errorMsg = '';
+  }
 
   async function handleSave() {
     errorMsg = '';
@@ -67,12 +153,20 @@
     const dataToSave = {
       code: formData.code.trim(),
       name: formData.name.trim(),
-      type: formData.type.trim(),
-      category: formData.category,
-      unit: formData.unit,
-      price: formData.price ? parseFloat(formData.price as string) : 0,
-      cost: formData.cost ? parseFloat(formData.cost as string) : 0,
-      status: formData.status.trim()
+      description: formData.description?.trim() || '',
+      category: formData.category || '',
+      unit_id: formData.unit_id || '',
+      is_inventory: !!formData.is_inventory,
+      is_sellable: formData.is_sellable === undefined ? true : !!formData.is_sellable,
+      is_purchasable: formData.is_purchasable === undefined ? true : !!formData.is_purchasable,
+      sales_price: formData.sales_price ? parseFloat(formData.sales_price as string) : 0,
+      purchase_price: formData.purchase_price ? parseFloat(formData.purchase_price as string) : 0,
+      income_account_id: formData.income_account_id || '',
+      expense_account_id: formData.expense_account_id || '',
+      inventory_account_id: formData.inventory_account_id || '',
+      cogs_account_id: formData.cogs_account_id || '',
+      average_cost: formData.average_cost || 0,
+      is_active: formData.is_active === undefined ? true : !!formData.is_active
     };
     try {
       if (editingItem) {
@@ -84,7 +178,24 @@
         await addDocToCollection(collectionPath, dataToSave);
       }
       showModal = false;
-      formData = { code: '', name: '', type: '', category: '', unit: '', price: '', cost: '', status: '' };
+      formData = {
+        code: '',
+        name: '',
+        description: '',
+        category: '',
+        unit_id: '',
+        is_inventory: false,
+        is_sellable: true,
+        is_purchasable: true,
+        sales_price: '',
+        purchase_price: '',
+        income_account_id: '',
+        expense_account_id: '',
+        inventory_account_id: '',
+        cogs_account_id: '',
+        average_cost: 0,
+        is_active: true
+      };
     } catch (e) {
       errorMsg = 'Failed to save: ' + (e as Error).message;
     }
@@ -94,12 +205,47 @@
     showModal = false;
     errorMsg = '';
     editingItem = null;
-    formData = { code: '', name: '', type: '', category: '', unit: '', price: '', cost: '', status: '' };
+    formData = {
+      code: '',
+      name: '',
+      description: '',
+      category: '',
+      unit_id: '',
+      is_inventory: false,
+      is_sellable: true,
+      is_purchasable: true,
+      sales_price: '',
+      purchase_price: '',
+      income_account_id: '',
+      expense_account_id: '',
+      inventory_account_id: '',
+      cogs_account_id: '',
+      average_cost: 0,
+      is_active: true
+    };
   }
 
   function handleEdit(item: any) {
     editingItem = item;
-    formData = { ...item, price: item.price?.toString?.() ?? '', cost: item.cost?.toString?.() ?? '' };
+    // Create a new form data object without including any type property from old data
+    formData = {
+      code: item.code || '',
+      name: item.name || '',
+      description: item.description || '',
+      category: item.category || '',
+      unit_id: item.unit_id || '',
+      is_inventory: !!item.is_inventory,
+      is_sellable: item.is_sellable === undefined ? true : !!item.is_sellable,
+      is_purchasable: item.is_purchasable === undefined ? true : !!item.is_purchasable,
+      sales_price: item.sales_price?.toString() ?? '',
+      purchase_price: item.purchase_price?.toString() ?? '',
+      income_account_id: item.income_account_id || '',
+      expense_account_id: item.expense_account_id || '',
+      inventory_account_id: item.inventory_account_id || '',
+      cogs_account_id: item.cogs_account_id || '',
+      average_cost: item.average_cost || 0,
+      is_active: item.is_active === undefined ? true : !!item.is_active
+    };
     showModal = true;
     errorMsg = '';
   }
@@ -117,28 +263,34 @@
 </script>
 
 <div class="bg-white rounded-2xl shadow-xl p-8">
-  <h1 class="text-2xl font-bold mb-2">Item Management</h1>
-  <p class="mb-6 text-gray-500">Manage your items here</p>
-  <div class="flex flex-row gap-2 mb-4 items-center">
-    <div class="ml-auto">
-      <ListButtons {buttons} />
-    </div>
-  </div>
-  <FireTable collectionPath="masterlist/items" {columns} queryOptions={[]}>
-    <svelte:fragment slot="actions" let:row>
+  <MasterListContainer
+    {rootCollection}
+    {parentCollection}
+    {subCollectionName}
+    {documentType}
+    {title}
+    {subtitle}
+    {primaryColorClass}
+    {columns}
+    {buttons}
+    queryOptions={[]}
+    defaultButtons={false}
+    allowDelete={false}
+  >
+    <svelte:fragment slot="additionalActions" let:row>
       <button class="btn btn-ghost btn-xs" aria-label="Edit item" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
       <button class="btn btn-ghost btn-xs" aria-label="Delete item" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
     </svelte:fragment>
-  </FireTable>
+  </MasterListContainer>
+</div>
 
-  {#if showModal}
-    <ModalForm
-      title={editingItem ? 'Edit Item' : 'Add Item'}
-      fields={itemFields}
-      bind:formData
-      {errorMsg}
-      onSave={handleSave}
-      onCancel={handleCancel}
-    />
-  {/if}
-</div> 
+{#if showModal}
+  <ModalForm
+    title={editingItem ? 'Edit Item' : 'Add Item'}
+    fields={itemFields}
+    bind:formData
+    {errorMsg}
+    onSave={handleSave}
+    onCancel={handleCancel}
+  />
+{/if}

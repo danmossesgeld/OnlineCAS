@@ -1,9 +1,7 @@
 <script lang="ts">
-  import FireTable from '$lib/components/FireTable.svelte';
-  import ListButtons from '$lib/components/ListButtons.svelte';
+  import MasterListContainer from '$lib/components/MasterListContainer.svelte';
   import ModalForm from '$lib/components/ModalForm.svelte';
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
-  import { collectionStore } from '$lib/utils/firestoreStores';
   
   // Config for form fields
   $: termFields = [
@@ -14,19 +12,32 @@
     { label: 'Name', key: 'name' }
   ];
   
-  // Get data from stores
-  const termsStore = collectionStore('otherlist', 'terms');
-  $: terms = $termsStore || [];
-
-  let parentCollection = 'otherlist';
-  let subCollectionName = 'terms';
-  let collectionPath = 'otherlist/terms';  // This will be mapped to listdatabase/otherlist/terms
+  // Collection paths
+  const rootCollection = 'listdatabase';
+  const parentCollection = 'otherlist';
+  const subCollectionName = 'terms';
+  const collectionPath = 'otherlist/terms';  // This will be mapped to listdatabase/otherlist/terms
+  
+  // ListContainer configuration
+  const documentType = 'term';
+  const title = 'Payment Terms';
+  const subtitle = 'Manage payment terms for transactions';
+  const primaryColorClass = 'teal';
   
   let showModal = false;
   let errorMsg = '';
   let editingItem: { id: string, name: string } | null = null;
   let formData = { name: '' };
-  const buttons = [
+  // Define button type to match the structure we need
+  type Button = {
+    label: string;
+    color: string;
+    icon?: string;
+    onClick: () => void;
+    class?: string;
+  };
+
+  const buttons: Button[] = [
     {
       label: 'New Term',
       color: 'primary',
@@ -77,18 +88,25 @@
   }
 </script>
 <div class="bg-white rounded-2xl shadow-xl p-8">
-  <h1 class="text-2xl font-bold mb-2 flex items-center gap-2"><iconify-icon icon="material-symbols:event-note-rounded" width="28" height="28"></iconify-icon> Terms</h1>
-  <div class="flex flex-row gap-2 mb-4 items-center">
-    <div class="ml-auto">
-      <ListButtons {buttons} />
-    </div>
-  </div>
-  <FireTable parentCollection={parentCollection} subCollectionName={subCollectionName} {columns} queryOptions={[]}>
-    <svelte:fragment slot="actions" let:row>
+  <MasterListContainer
+    {rootCollection}
+    {parentCollection}
+    {subCollectionName}
+    {documentType}
+    {title}
+    {subtitle}
+    {primaryColorClass}
+    {columns}
+    {buttons}
+    queryOptions={[]}
+    defaultButtons={false}
+    allowDelete={false}
+  >
+    <svelte:fragment slot="additionalActions" let:row>
       <button class="btn btn-ghost btn-xs" aria-label="Edit term" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
       <button class="btn btn-ghost btn-xs" aria-label="Delete term" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
     </svelte:fragment>
-  </FireTable>
+  </MasterListContainer>
 </div>
 {#if showModal}
   <ModalForm

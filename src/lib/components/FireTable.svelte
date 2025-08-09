@@ -12,7 +12,7 @@
   export let rootCollection: string = '';      // Root collection name (e.g., 'transactions')
   export let parentCollection: string = '';    // Parent collection name (e.g., 'customerCenter')
   export let subCollectionName: string = '';   // Subcollection name (e.g., 'salesInvoices')
-  export let columns: Array<{ label: string; key: string; width?: string }> = [];
+  export let columns: Array<{ label: string; key: string; width?: string; type?: string }> = [];
   export let queryOptions: QueryConstraint[] = [];
   
   // Provided for external reference - not used in this component
@@ -85,12 +85,20 @@
         <tr class="{idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50 transition-colors duration-150">
           {#each columns as col}
             <td class="px-4 py-3 align-middle border-b border-gray-100">
-              {#if col.key === 'date' || col.key === 'dueDate' || col.key === 'invoiceDate'}
-                {#if row[col.key] && (row[col.key] instanceof Date || row[col.key].seconds)}
+              {#if col.type === 'date' || col.key.toLowerCase().includes('date')}
+                {#if row[col.key]}
                   <span class="text-gray-600">
-                    {row[col.key] instanceof Date ? 
-                      row[col.key].toLocaleDateString() : 
-                      new Date(row[col.key].seconds * 1000).toLocaleDateString()}
+                    {#if row[col.key] instanceof Date}
+                      {row[col.key].toLocaleDateString()}
+                    {:else if row[col.key] && row[col.key].seconds}
+                      {new Date(row[col.key].seconds * 1000).toLocaleDateString()}
+                    {:else if typeof row[col.key] === 'number'}
+                      {new Date(parseInt(row[col.key])).toLocaleDateString()}
+                    {:else if typeof row[col.key] === 'string' && !isNaN(Date.parse(row[col.key]))}
+                      {new Date(row[col.key]).toLocaleDateString()}
+                    {:else}
+                      {row[col.key]}
+                    {/if}
                   </span>
                 {:else}
                   <span class="text-gray-600">-</span>

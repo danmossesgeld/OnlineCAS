@@ -1,10 +1,10 @@
-import { firestoreOptionsStore } from './firestoreOptions';
+import { createFirestoreOptionsStore } from './firestoreOptions';
 
 // Central registry for commonly used Firestore option stores
-export const categoryOptions = firestoreOptionsStore('categories');
-export const unitOptions = firestoreOptionsStore('units');
-export const customerOptions = firestoreOptionsStore('customers', 'name', 'id');
-export const termsOptions = firestoreOptionsStore('terms');
-export const paymentMethodOptions = firestoreOptionsStore('paymentmethods');
-export const itemOptions = firestoreOptionsStore('items', 'name', 'id');
-export const taxTypeOptions = firestoreOptionsStore('tax', 'name', 'id'); 
+export const categoryOptions = createFirestoreOptionsStore('categories');
+export const unitOptions = createFirestoreOptionsStore('units');
+export const customerOptions = createFirestoreOptionsStore('customers', 'name', 'id');
+export const termsOptions = createFirestoreOptionsStore('terms');
+export const paymentMethodOptions = createFirestoreOptionsStore('paymentmethods');
+export const itemOptions = createFirestoreOptionsStore('items', 'name', 'id');
+export const taxTypeOptions = createFirestoreOptionsStore('tax', 'name', 'id'); 

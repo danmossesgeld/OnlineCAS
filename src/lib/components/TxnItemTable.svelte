@@ -46,9 +46,20 @@
               {#if editable && col.type === 'select'}
                 <select class="w-full bg-transparent text-gray-700 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 px-2 py-1.5 text-sm" bind:value={(row as Record<string, any>)[col.key]}>
                   <option value="" disabled selected>{col.label}</option>
-                  {#if (col as any).options?.length}
+                  {#if typeof (col as any).options === 'function'}
+                    <!-- Handle function-based options (like getEntityOptions) -->
+                    {@const optionsArray = (col as any).options(row) || []}
+                    {#each optionsArray as opt}
+                      {#if opt && typeof opt === 'object' && 'value' in opt && 'label' in opt}
+                        <option value={opt.value}>{opt.label}</option>
+                      {/if}
+                    {/each}
+                  {:else if Array.isArray((col as any).options)}
+                    <!-- Handle static array options -->
                     {#each (col as any).options as opt}
-                      <option value={opt.value}>{opt.label}</option>
+                      {#if opt && typeof opt === 'object' && 'value' in opt && 'label' in opt}
+                        <option value={opt.value}>{opt.label}</option>
+                      {/if}
                     {/each}
                   {/if}
                 </select>
@@ -67,12 +78,18 @@
                        on:input={(e) => onUpdate(idx, col.key, (e.target as HTMLInputElement)?.value)}>
               {:else}
                 <!-- Display readable values for reference fields in non-editable mode -->
-                {#if col.key === 'item' && (row as Record<string, any>)['itemName']}
+                {#if (col as any).displayField && (row as Record<string, any>)[(col as any).displayField]}
+                  <!-- If a display field is specified and has a value, use that -->
+                  <span class="text-gray-700">{(row as Record<string, any>)[(col as any).displayField]}</span>
+                {:else if col.key === 'item' && (row as Record<string, any>)['itemName']}
                   <span class="text-gray-700">{(row as Record<string, any>)['itemName']}</span>
                 {:else if col.key === 'unit' && (row as Record<string, any>)['unitName']}
                   <span class="text-gray-700">{(row as Record<string, any>)['unitName']}</span>
                 {:else if col.key === 'taxType' && (row as Record<string, any>)['taxTypeName']}
                   <span class="text-gray-700">{(row as Record<string, any>)['taxTypeName']}</span>
+                {:else if col.key === 'nameId' && (row as Record<string, any>)['nameName']}
+                  <!-- Specific fix for entity fields in journal entries -->
+                  <span class="text-gray-700">{(row as Record<string, any>)['nameName']}</span>
                 {:else}
                   <span class="text-gray-700">{(row as Record<string, any>)[col.key]}</span>
                 {/if}

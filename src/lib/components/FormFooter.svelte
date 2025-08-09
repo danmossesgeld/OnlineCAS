@@ -1,6 +1,4 @@
 <script lang="ts">
-  import FormButtons from './FormButtons.svelte';
-  
   // Button properties
   export let primaryLabel = 'Save';
   export let secondaryLabel = '';
@@ -97,55 +95,58 @@
             </div>
             
             <!-- Summary Values - Two Column Layout -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
-              <!-- Column 1 -->
-              <div>
-                <div class="flex justify-between items-center mb-1">
-                  <span class="text-gray-600">Gross Amount:</span>
-                  <span class="font-medium">₱{gross.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+            <div class="space-y-5">
+              <!-- Two-column summary layout with improved spacing -->
+              <div class="flex gap-8">
+                <!-- Left column with better typography -->
+                <div class="w-1/2 space-y-3">
+                  <div class="flex justify-between items-center">
+                    <span class="text-gray-700 text-sm">Gross Amount:</span>
+                    <span class="font-medium text-base">₱{gross.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-gray-700 text-sm">Discount:</span>
+                    <span class="text-red-500 font-medium text-base">-₱{disc.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-gray-700 text-sm">Net Sales:</span>
+                    <span class="font-medium text-base">₱{net.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-gray-700 text-sm">VAT:</span>
+                    <span class="font-medium text-base">₱{vatVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
                 </div>
-                <div class="flex justify-between items-center mb-1">
-                  <span class="text-gray-600">Discount:</span>
-                  <span class="text-red-500 font-medium">-₱{disc.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                </div>
-                <div class="flex justify-between items-center mb-1 pt-1 border-t border-gray-200">
-                  <span class="text-gray-600">Net Sales:</span>
-                  <span class="font-medium">₱{net.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                </div>
-                <div class="flex justify-between items-center mb-1">
-                  <span class="text-gray-600">VAT:</span>
-                  <span class="font-medium">₱{vatVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                
+                <!-- Right column with better typography -->
+                <div class="w-1/2 space-y-3">
+                  <div class="flex justify-between items-center">
+                    <span class="text-gray-700 text-sm">Vatable Sales:</span>
+                    <span class="font-medium text-base">₱{vatable.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-gray-700 text-sm">Zero-rated:</span>
+                    <span class="font-medium text-base">₱{zero.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-gray-700 text-sm">VAT-Exempt:</span>
+                    <span class="font-medium text-base">₱{exempt.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-gray-700 text-sm">{withholdingLabel}:</span>
+                    <span class="text-red-500 font-medium text-base">-₱{withhold.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
                 </div>
               </div>
               
-              <!-- Column 2 -->
-              <div>
-                <div class="flex justify-between items-center mb-1">
-                  <span class="text-gray-600">Vatable Sales:</span>
-                  <span class="font-medium">₱{vatable.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                </div>
-                <div class="flex justify-between items-center mb-1">
-                  <span class="text-gray-600">Zero-rated:</span>
-                  <span class="font-medium">₱{zero.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                </div>
-                <div class="flex justify-between items-center mb-1">
-                  <span class="text-gray-600">VAT-Exempt:</span>
-                  <span class="font-medium">₱{exempt.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                </div>
-                <div class="flex justify-between items-center mb-1">
-                  <span class="text-gray-600">{withholdingLabel}:</span>
-                  <span class="text-red-500 font-medium">-₱{withhold.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                </div>
+              <!-- Total Amount Due with improved styling -->
+              <div class="flex justify-between font-bold mt-4 pt-3 border-t border-gray-300 items-center">
+                <span class="flex items-center">
+                  <iconify-icon icon="material-symbols:payments" width="24" height="24" class="mr-2 text-green-600"></iconify-icon> 
+                  <span class="text-lg">Total Amount Due:</span>
+                </span>
+                <span class="text-green-600 bg-green-50 px-4 py-2 rounded-lg border border-green-200 text-lg">₱{total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
               </div>
-            </div>
-            
-            <!-- Total Amount Due -->
-            <div class="flex justify-between font-bold text-base mt-3 pt-2 border-t border-gray-300 items-center">
-              <span class="flex items-center">
-                <iconify-icon icon="material-symbols:payments" width="20" height="20" class="mr-1"></iconify-icon> 
-                <span>Total Amount Due:</span>
-              </span>
-              <span class="text-green-600 bg-green-50 px-3 py-1 rounded-lg border border-green-200">₱{total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
             </div>
           </div>
         </div>
@@ -162,12 +163,32 @@
       <div class="w-full flex justify-end">
         <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
           <slot name="custom-buttons">
-            <FormButtons
-              primaryButtonLabel={primaryLabel}
-              secondaryButtonLabel={showSecondaryButton ? secondaryLabel : ""}
-              onPrimaryClick={onPrimaryClick}
-              onSecondaryClick={showSecondaryButton ? onSecondaryClick : undefined}
-            />
+            <div class="flex gap-3 justify-end w-full flex-wrap mt-2">
+              {#if showSecondaryButton}
+                <button
+                  class="bg-transparent border-2 border-indigo-500 text-indigo-600 hover:bg-indigo-50
+                         px-5 py-2.5 rounded-lg font-medium flex items-center gap-2.5 
+                         transition-all duration-200 ease-in-out 
+                         shadow-sm hover:shadow-md 
+                         focus:outline-none focus:ring-2 focus:ring-opacity-50 focus:ring-indigo-300"
+                  type="button"
+                  on:click={onSecondaryClick}
+                >
+                  {secondaryLabel}
+                </button>
+              {/if}
+              <button
+                class="bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 text-white
+                       px-5 py-2.5 rounded-lg font-medium flex items-center gap-2.5 
+                       transition-all duration-200 ease-in-out 
+                       shadow-sm hover:shadow-md 
+                       focus:outline-none focus:ring-2 focus:ring-opacity-50 focus:ring-indigo-300"
+                type="submit"
+                on:click={onPrimaryClick}
+              >
+                {primaryLabel}
+              </button>
+            </div>
           </slot>
         </div>
       </div>

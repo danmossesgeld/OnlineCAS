@@ -12,7 +12,8 @@ function getRootCollectionName(parentCollection: string): string {
     'masterlist': 'listdatabase',
     'otherlist': 'listdatabase',
     'customerCenter': 'transactions',
-    'vendorCenter': 'transactions'
+    'vendorCenter': 'transactions',
+    'accounting': 'transactions'
   };
   
   return rootCollectionMap[parentCollection] || 'listdatabase';

@@ -4,8 +4,10 @@
   import FormSection from '$lib/components/FormSection.svelte';
   import FormFooter from '$lib/components/FormFooter.svelte';
   import { onMount } from 'svelte';
-  import { firestoreOptionsStore } from '$lib/utils/firestoreOptions';
+  import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
+  import { createSalesInvoiceJournalEntry } from '$lib/utils/accountingService';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   
@@ -37,12 +39,12 @@
   let unitOptions: {label: string, value: any}[] = [];
   let taxTypeOptions: {label: string, value: any}[] = [];
 
-  firestoreOptionsStore('customers', 'name', 'id').subscribe(opts => customerOptions = opts);
-  firestoreOptionsStore('terms').subscribe(opts => termsOptions = opts);
-  firestoreOptionsStore('paymentmethods').subscribe(opts => paymentMethodOptions = opts);
-  firestoreOptionsStore('items', 'name', 'id').subscribe(opts => itemOptions = opts);
-  firestoreOptionsStore('units').subscribe(opts => unitOptions = opts);
-  firestoreOptionsStore('tax', 'name', 'id').subscribe(opts => taxTypeOptions = opts);
+  createFirestoreOptionsStore('customers', 'name', 'id').subscribe(opts => customerOptions = opts);
+  createFirestoreOptionsStore('terms').subscribe(opts => termsOptions = opts);
+  createFirestoreOptionsStore('paymentmethods').subscribe(opts => paymentMethodOptions = opts);
+  createFirestoreOptionsStore('items', 'name', 'id').subscribe(opts => itemOptions = opts);
+  createFirestoreOptionsStore('units').subscribe(opts => unitOptions = opts);
+  createFirestoreOptionsStore('tax', 'name', 'id').subscribe(opts => taxTypeOptions = opts);
 
   const withholdingTaxOptions = [
     { label: 'Select Withholding Tax', value: '' },
@@ -332,27 +334,44 @@
         updatedAt: new Date()
       };
 
-      // Generate a standardized invoice number if needed
-      const generateInvoiceNumber = () => `INV-${Date.now().toString().substring(7)}`;
-      
       // Handle mode-specific operations
       if (isCreateMode) {
+        // Generate a sequential invoice number
+        const invoiceNo = await generateNextDocumentId(DocumentType.SALES_INVOICE);
+        
         const newInvoiceData = {
           ...baseInvoiceData,
-          invoiceNo: generateInvoiceNumber(),
+          invoiceNo,
           createdAt: new Date(),
           status: 'Draft'
         };
         
-        await addDocToCollection('transactions', 'customerCenter', 'salesInvoices', newInvoiceData);
+        // Add the invoice to Firestore and get the document reference
+        const docRef = await addDocToCollection('transactions/customerCenter/salesInvoices', newInvoiceData);
+        
+        // Create journal entry for the new invoice
+        const invoiceWithId = { ...newInvoiceData, id: docRef.id };
+        const journalEntryId = await createSalesInvoiceJournalEntry(invoiceWithId);
+        
+        // Log the result for debugging
+        console.log(`Created journal entry with ID: ${journalEntryId}`);
         alert('Invoice created successfully');
       } else if (isEditMode) {
+        // For edit mode, use the original invoice number
         const updateInvoiceData = {
           ...baseInvoiceData,
-          invoiceNo: formData.originalInvoiceNo || generateInvoiceNumber()
+          invoiceNo: formData.originalInvoiceNo || await generateNextDocumentId(DocumentType.SALES_INVOICE)
         };
         
+        // Update the invoice in Firestore
         await updateDocInCollection('transactions/customerCenter/salesInvoices', docId, updateInvoiceData);
+        
+        // Create or update journal entry for the updated invoice
+        const invoiceWithId = { ...updateInvoiceData, id: docId };
+        const journalEntryId = await createSalesInvoiceJournalEntry(invoiceWithId);
+        
+        // Log the result for debugging
+        console.log(`Updated journal entry with ID: ${journalEntryId}`);
         alert('Invoice updated successfully');
       }
       

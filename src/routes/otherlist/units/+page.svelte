@@ -1,9 +1,7 @@
 <script lang="ts">
-  import FireTable from '$lib/components/FireTable.svelte';
-  import ListButtons from '$lib/components/ListButtons.svelte';
+  import MasterListContainer from '$lib/components/MasterListContainer.svelte';
   import ModalForm from '$lib/components/ModalForm.svelte';
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
-  import { collectionStore } from '$lib/utils/firestoreStores';
 
   // Config for form fields
   $: unitFields = [
@@ -14,15 +12,37 @@
     { label: 'Name', key: 'name' }
   ];
 
-  let parentCollection = 'otherlist';
-  let subCollectionName = 'units';
-  let collectionPath = 'otherlist/units';  // This will be mapped to listdatabase/otherlist/units
+  // Collection paths
+  const rootCollection = 'listdatabase';
+  const parentCollection = 'otherlist';
+  const subCollectionName = 'units';
+  const collectionPath = 'otherlist/units';  // This will be mapped to listdatabase/otherlist/units
+  
+  // ListContainer configuration
+  const documentType = 'unit';
+  const title = 'Units';
+  const subtitle = 'Manage measurement units for your inventory items';
+  const primaryColorClass = 'blue';
+  const totalLabel = 'Total Units';
+  const postedLabel = '';
+  const draftLabel = '';
+  const pendingLabel = '';
+  const overdueLabel = '';
 
   let showModal = false;
   let errorMsg = '';
   let formData = { name: '' };
   let editingItem: { id: string, name: string } | null = null;
-  const buttons = [
+  // Define button type to match the structure we need
+  type Button = {
+    label: string;
+    color: string;
+    icon?: string;
+    onClick: () => void;
+    class?: string;
+  };
+
+  const buttons: Button[] = [
     {
       label: 'New Unit',
       color: 'primary',
@@ -73,18 +93,25 @@
   }
 </script>
 <div class="bg-white rounded-2xl shadow-xl p-8">
-  <h1 class="text-2xl font-bold mb-2 flex items-center gap-2"><iconify-icon icon="material-symbols:straighten-rounded" width="28" height="28"></iconify-icon> Units</h1>
-  <div class="flex flex-row gap-2 mb-4 items-center">
-    <div class="ml-auto">
-      <ListButtons {buttons} />
-    </div>
-  </div>
-  <FireTable {collectionPath} {columns} queryOptions={[]}>
-    <svelte:fragment slot="actions" let:row>
+  <MasterListContainer
+    {rootCollection}
+    {parentCollection}
+    {subCollectionName}
+    {documentType}
+    {title}
+    {subtitle}
+    {primaryColorClass}
+    {columns}
+    {buttons}
+    queryOptions={[]}
+    defaultButtons={false}
+    allowDelete={false}
+  >
+    <svelte:fragment slot="additionalActions" let:row>
       <button class="btn btn-ghost btn-xs" aria-label="Edit unit" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
       <button class="btn btn-ghost btn-xs" aria-label="Delete unit" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
     </svelte:fragment>
-  </FireTable>
+  </MasterListContainer>
 
   {#if showModal}
     <ModalForm

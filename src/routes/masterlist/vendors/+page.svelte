@@ -1,6 +1,5 @@
 <script lang="ts">
-  import FireTable from '$lib/components/FireTable.svelte';
-  import ListButtons from '$lib/components/ListButtons.svelte';
+  import MasterListContainer from '$lib/components/MasterListContainer.svelte';
   import ModalForm from '$lib/components/ModalForm.svelte';
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
 
@@ -8,31 +7,74 @@
   $: vendorFields = [
     { label: 'Code*', name: 'code', type: 'text', required: true },
     { label: 'Name*', name: 'name', type: 'text', required: true },
-    { label: 'Type', name: 'type', type: 'text' },
-    { label: 'Status', name: 'status', type: 'text' }
+    { label: 'Contact Person', name: 'contact_person', type: 'text' },
+    { label: 'Phone', name: 'phone', type: 'text' },
+    { label: 'Email', name: 'email', type: 'email' },
+    { label: 'Address', name: 'address', type: 'textarea' },
+    { label: 'Tax ID', name: 'tax_id', type: 'text' },
+    { label: 'Active', name: 'is_active', type: 'checkbox', default: true }
   ];
 
   const columns = [
     { label: 'Code', key: 'code' },
     { label: 'Name', key: 'name' },
-    { label: 'Type', key: 'type' },
-    { label: 'Status', key: 'status' }
+    { label: 'Contact Person', key: 'contact_person' },
+    { label: 'Phone', key: 'phone' },
+    { label: 'Email', key: 'email' },
+    { label: 'Tax ID', key: 'tax_id' },
+    { label: 'Status', key: 'is_active', format: (value: boolean) => value ? 'Active' : 'Inactive' }
   ];
 
-  let collectionPath = 'masterlist/vendors';
-  let showModal = false;
-  let errorMsg = '';
-  let formData = { code: '', name: '', type: '', status: '' };
-  let editingItem: { id: string } | null = null;
-
+  // Collection paths
+  const rootCollection = 'listdatabase';
+  const parentCollection = 'masterlist';
+  const subCollectionName = 'vendors';
+  const collectionPath = 'masterlist/vendors';
+  
+  // ListContainer configuration
+  const documentType = 'vendor';
+  const title = 'Vendor Masterlist';
+  const subtitle = 'Manage your suppliers and service providers';
+  const primaryColorClass = 'indigo';
+  
+  // Define buttons for the list container
   const buttons = [
     {
       label: 'New Vendor',
       color: 'primary',
       icon: 'material-symbols:add',
-      onClick: () => { showModal = true; editingItem = null; formData = { code: '', name: '', type: '', status: '' }; errorMsg = ''; }
+      onClick: handleAdd
     }
   ];
+  let showModal = false;
+  let errorMsg = '';
+  let formData = {
+    code: '',
+    name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    address: '',
+    tax_id: '',
+    is_active: true
+  };
+  let editingItem: { id: string } | null = null;
+
+  function handleAdd() {
+    showModal = true; 
+    editingItem = null; 
+    formData = {
+      code: '',
+      name: '',
+      contact_person: '',
+      phone: '',
+      email: '',
+      address: '',
+      tax_id: '',
+      is_active: true
+    }; 
+    errorMsg = '';
+  }
 
   async function handleSave() {
     errorMsg = '';
@@ -40,12 +82,41 @@
       errorMsg = 'Code and Name are required.';
       return;
     }
-    const dataToSave = {
+    
+    // Email validation if provided
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errorMsg = 'Please enter a valid email address.';
+      return;
+    }
+    
+    // Define data type with all fields including timestamps
+    const dataToSave: {
+      code: string;
+      name: string;
+      contact_person: string;
+      phone: string;
+      email: string;
+      address: string;
+      tax_id: string;
+      is_active: boolean;
+      updated_at: Date;
+      created_at?: Date;
+    } = {
       code: formData.code.trim(),
       name: formData.name.trim(),
-      type: formData.type.trim(),
-      status: formData.status.trim()
+      contact_person: formData.contact_person?.trim() || '',
+      phone: formData.phone?.trim() || '',
+      email: formData.email?.trim() || '',
+      address: formData.address?.trim() || '',
+      tax_id: formData.tax_id?.trim() || '',
+      is_active: formData.is_active === undefined ? true : formData.is_active,
+      updated_at: new Date()
     };
+    
+    // Add created_at only for new records
+    if (!editingItem) {
+      dataToSave.created_at = new Date();
+    }
     try {
       if (editingItem) {
         await updateDocInCollection(collectionPath, editingItem.id, dataToSave);
@@ -54,7 +125,16 @@
         await addDocToCollection(collectionPath, dataToSave);
       }
       showModal = false;
-      formData = { code: '', name: '', type: '', status: '' };
+      formData = {
+        code: '',
+        name: '',
+        contact_person: '',
+        phone: '',
+        email: '',
+        address: '',
+        tax_id: '',
+        is_active: true
+      };
     } catch (e) {
       errorMsg = 'Failed to save: ' + (e as Error).message;
     }
@@ -64,7 +144,16 @@
     showModal = false;
     errorMsg = '';
     editingItem = null;
-    formData = { code: '', name: '', type: '', status: '' };
+    formData = {
+      code: '',
+      name: '',
+      contact_person: '',
+      phone: '',
+      email: '',
+      address: '',
+      tax_id: '',
+      is_active: true
+    };
   }
 
   function handleEdit(item: any) {
@@ -86,28 +175,34 @@
 </script>
 
 <div class="bg-white rounded-2xl shadow-xl p-8">
-  <h1 class="text-2xl font-bold mb-2">Vendor Masterlist</h1>
-  <p class="mb-6 text-gray-500">Manage your vendors here</p>
-  <div class="flex flex-row gap-2 mb-4 items-center">
-    <div class="ml-auto">
-      <ListButtons {buttons} />
-    </div>
-  </div>
-  <FireTable {collectionPath} {columns} queryOptions={[]}> 
-    <svelte:fragment slot="actions" let:row>
-      <button class="btn btn-ghost btn-xs" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
-      <button class="btn btn-ghost btn-xs" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
+  <MasterListContainer
+    {rootCollection}
+    {parentCollection}
+    {subCollectionName}
+    {documentType}
+    {title}
+    {subtitle}
+    {primaryColorClass}
+    {columns}
+    {buttons}
+    queryOptions={[]}
+    defaultButtons={false}
+    allowDelete={false}
+  >
+    <svelte:fragment slot="additionalActions" let:row>
+      <button class="btn btn-ghost btn-xs" aria-label="Edit vendor" on:click={() => handleEdit(row)}><iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon></button>
+      <button class="btn btn-ghost btn-xs" aria-label="Delete vendor" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
     </svelte:fragment>
-  </FireTable>
+  </MasterListContainer>
+</div>
 
-  {#if showModal}
-    <ModalForm
-      title={editingItem ? 'Edit Vendor' : 'Add Vendor'}
-      fields={vendorFields}
-      bind:formData
-      {errorMsg}
-      onSave={handleSave}
-      onCancel={handleCancel}
-    />
-  {/if}
-</div> 
+{#if showModal}
+  <ModalForm
+    title={editingItem ? 'Edit Vendor' : 'Add Vendor'}
+    fields={vendorFields}
+    bind:formData
+    {errorMsg}
+    onSave={handleSave}
+    onCancel={handleCancel}
+  />
+{/if}
