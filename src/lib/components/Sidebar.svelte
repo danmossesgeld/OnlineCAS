@@ -66,10 +66,10 @@ function updateViewportHeight() {
 </script>
 
 <style>
-  /* Custom scrollbar styling */
+  /* Enhanced scrollbar styling */
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: rgba(203, 213, 225, 0.5) transparent;
+    scrollbar-color: var(--color-neutral-300) transparent;
   }
   
   .custom-scrollbar::-webkit-scrollbar {
@@ -81,127 +81,214 @@ function updateViewportHeight() {
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(203, 213, 225, 0.5);
-    border-radius: 20px;
+    background: var(--color-neutral-300);
+    border-radius: var(--radius-lg);
+    transition: background var(--transition-normal);
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(148, 163, 184, 0.7);
+    background: var(--color-neutral-400);
+  }
+
+  /* Modern navigation styles */
+  .nav-item {
+    position: relative;
+    transition: all var(--transition-normal);
+  }
+
+  .nav-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 0;
+    background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    transition: height var(--transition-normal);
+  }
+
+  .nav-item.active::before {
+    height: 70%;
+  }
+
+  .nav-dropdown {
+    background: linear-gradient(135deg, var(--color-neutral-0), var(--color-neutral-50));
+    border-radius: var(--radius-lg);
+    margin: var(--space-1) 0;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
   }
 </style>
 
-<!-- Mobile toggle button - visible only on small screens -->
+<!-- Modern mobile toggle button -->
 <button
-  class="fixed top-4 left-4 z-50 md:hidden bg-white p-2 rounded-lg shadow-md hover:bg-blue-50 transition-colors duration-200"
+  class="fixed top-4 left-4 z-50 md:hidden glass-effect p-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 group"
   on:click={toggleSidebar}
   aria-label="Toggle Sidebar"
+  style="backdrop-filter: blur(10px);"
 >
-  <iconify-icon icon="material-symbols:menu" width="24" height="24"></iconify-icon>
+  <iconify-icon 
+    icon="material-symbols:menu" 
+    width="20" 
+    height="20" 
+    class="text-gray-700 group-hover:text-blue-600 transition-colors duration-200"
+  ></iconify-icon>
 </button>
 
 <aside
-  class="w-64 bg-white shadow-lg flex flex-col p-0 border-r border-gray-100 fixed top-0 left-0 z-40 transform transition-transform duration-300 ease-in-out {collapsed ? '-translate-x-full' : 'translate-x-0'} md:translate-x-0 overflow-hidden"
-  style="height: {viewportHeight}px;"
+  class="w-64 glass-effect flex flex-col p-0 fixed top-0 left-0 z-40 transform transition-all duration-300 ease-in-out {collapsed ? '-translate-x-full' : 'translate-x-0'} md:translate-x-0 overflow-hidden"
+  style="height: {viewportHeight}px; border-right: 1px solid var(--color-neutral-200); box-shadow: var(--shadow-2xl);"
 >
-  <!-- Modern header with larger logo and premium feel -->
-  <div class="flex flex-col py-6 px-4 border-b border-gray-100 bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100">
-    <div class="flex justify-center mb-3">
-      <img src="/companylogo.png" alt="Company Logo" class="w-28 h-auto object-contain" />
+  <!-- Modern header with enhanced styling -->
+  <div class="flex flex-col py-8 px-6" style="background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); border-bottom: 1px solid var(--color-neutral-200);">
+    <div class="flex justify-center mb-4">
+      <div class="p-2 rounded-2xl" style="background: var(--color-neutral-0); box-shadow: var(--shadow-lg);">
+        <img src="/companylogo.png" alt="Company Logo" class="w-24 h-auto object-contain" />
+      </div>
     </div>
-    <div class="mt-2 text-center">
-      <span class="font-bold text-gray-800 text-sm block mb-1">{#if $user}{$user.displayName || 'User'}{/if}</span>
-      <div class="flex items-center justify-center gap-1.5">
-        <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-        <span class="text-xs text-gray-600 truncate max-w-full block">{#if $user}{$user.email}{/if}</span>
+    <div class="text-center">
+      <h3 class="text-gradient" style="font-weight: var(--font-semibold); font-size: var(--text-sm); margin-bottom: var(--space-2);">
+        {#if $user}{$user.displayName || 'User'}{/if}
+      </h3>
+      <div class="flex items-center justify-center gap-2">
+        <div class="w-2 h-2 rounded-full" style="background: var(--color-success-500);"></div>
+        <span style="font-size: var(--text-xs); color: var(--color-neutral-600);" class="truncate max-w-full">
+          {#if $user}{$user.email}{/if}
+        </span>
       </div>
     </div>
   </div>
-  <!-- Navigation divider -->
-  <div class="px-4 pt-2 pb-1">
-    <div class="h-1 w-24 mx-auto bg-gradient-to-r from-transparent via-blue-100 to-transparent rounded-full"></div>
+  <!-- Enhanced navigation divider -->
+  <div class="px-6 py-3">
+    <div style="height: 2px; width: 60px; margin: 0 auto; background: linear-gradient(90deg, transparent, var(--color-primary-300), transparent); border-radius: var(--radius-lg);"></div>
   </div>
   
-  <!-- Navigation section with animated lists -->
-  <nav class="flex-1 overflow-y-auto px-3 py-2 custom-scrollbar">
-    <ul class="space-y-2">
-      <!-- Dashboard - simple link -->
-      <li class="mb-1">
+  <!-- Navigation section with modern styling -->
+  <nav class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
+    <ul style="padding: var(--space-2) 0;">
+      <!-- Dashboard - enhanced styling -->
+      <li class="nav-item {isActive('/main') ? 'active' : ''}" style="margin-bottom: var(--space-2);">
         <a
           href="/main"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/main') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+          class="flex items-center transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {isActive('/main') ? 'background: linear-gradient(135deg, var(--color-primary-100), var(--color-primary-50)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click|preventDefault={() => handleNav('/main')}
         >
-          <iconify-icon icon="material-symbols:dashboard" width="22" height="22" class="mr-2 {isActive('/main') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-          <span>Dashboard</span>
+          <iconify-icon 
+            icon="material-symbols:dashboard" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {isActive('/main') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+          ></iconify-icon>
+          <span style="font-weight: var(--font-medium); font-size: var(--text-sm);">Dashboard</span>
           {#if isActive('/main')}
-            <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+            <iconify-icon 
+              icon="material-symbols:chevron-right" 
+              width="16" 
+              height="16" 
+              class="ml-auto"
+              style="color: var(--color-primary-600);"
+            ></iconify-icon>
           {/if}
         </a>
       </li>
       
-      <!-- Customer Center as separate item below Dashboard -->
-      <li class="mb-1">
+      <!-- Customer Center with modern dropdown styling -->
+      <li class="nav-item" style="margin-bottom: var(--space-2);">
         <button
           type="button"
-          class="flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg text-gray-700 group hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 {customerCenterOpen ? 'bg-blue-50 text-blue-700' : ''}"
+          class="flex items-center w-full transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {customerCenterOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click={() => customerCenterOpen = !customerCenterOpen}
           aria-expanded={customerCenterOpen}
         >
-          <iconify-icon icon="material-symbols:group" width="22" height="22" class="mr-2"></iconify-icon>
-          <span>Customer Center</span>
+          <iconify-icon 
+            icon="material-symbols:group" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {customerCenterOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+          ></iconify-icon>
+          <span style="font-weight: var(--font-medium); font-size: var(--text-sm);">Customer Center</span>
           <iconify-icon
             icon="material-symbols:chevron-right"
-            width="20"
-            height="20"
+            width="16"
+            height="16"
             class="ml-auto transform transition-transform duration-200 {customerCenterOpen ? 'rotate-90' : ''}"
+            style="color: {customerCenterOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
           ></iconify-icon>
         </button>
         
-        <!-- Animated dropdown content -->
+        <!-- Modern dropdown content -->
         {#if customerCenterOpen}
-          <div transition:slide={{duration: 200, easing: quintOut}}>
-            <ul class="pl-4 mt-1 space-y-1">                  
+          <div class="nav-dropdown" transition:slide={{duration: 200, easing: quintOut}} style="margin-top: var(--space-2);">
+            <ul style="padding: var(--space-2);">
+                  
               <!-- Sales Invoice -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/customerCenter/salesInvoice/list"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/customerCenter/salesInvoice') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/customerCenter/salesInvoice') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/customerCenter/salesInvoice/list')}
                 >
-                  <iconify-icon icon="material-symbols:receipt-long-rounded" width="20" height="20" class="mr-2 {isActive('/customerCenter/salesInvoice') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Sales Invoice</span>
+                  <iconify-icon 
+                    icon="material-symbols:receipt-long-rounded" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/customerCenter/salesInvoice') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Sales Invoice</span>
                   {#if isActive('/customerCenter/salesInvoice')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               
               <!-- Customer Payment Receipt -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/customerCenter/receivePayment/list"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/customerCenter/receivePayment') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/customerCenter/receivePayment') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/customerCenter/receivePayment/list')}
                 >
-                  <iconify-icon icon="material-symbols:payments-outline" width="20" height="20" class="mr-2 {isActive('/customerCenter/receivePayment') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Receive Payment</span>
+                  <iconify-icon 
+                    icon="material-symbols:payments-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/customerCenter/receivePayment') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Receive Payment</span>
                   {#if isActive('/customerCenter/receivePayment')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               
               <!-- Credit Memo -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/customerCenter/creditMemo/list"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/customerCenter/creditMemo') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/customerCenter/creditMemo') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/customerCenter/creditMemo/list')}
                 >
-                  <iconify-icon icon="material-symbols:assignment-return-outline" width="20" height="20" class="mr-2 {isActive('/customerCenter/creditMemo') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Credit Memo</span>
+                  <iconify-icon 
+                    icon="material-symbols:assignment-return-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/customerCenter/creditMemo') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Credit Memo</span>
                   {#if isActive('/customerCenter/creditMemo')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
@@ -212,68 +299,98 @@ function updateViewportHeight() {
         {/if}
       </li>
       
-      <!-- Vendor Center with animated dropdown -->
-      <li class="mb-1">
+      <!-- Vendor Center with modern dropdown styling -->
+      <li class="nav-item" style="margin-bottom: var(--space-2);">
         <button
           type="button"
-          class="flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg text-gray-700 group hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 {vendorCenterOpen ? 'bg-blue-50 text-blue-700' : ''}"
+          class="flex items-center w-full transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {vendorCenterOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click={() => vendorCenterOpen = !vendorCenterOpen}
           aria-expanded={vendorCenterOpen}
         >
-          <iconify-icon icon="material-symbols:store" width="22" height="22" class="mr-2"></iconify-icon>
-          <span>Vendor Center</span>
+          <iconify-icon 
+            icon="material-symbols:store" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {vendorCenterOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+          ></iconify-icon>
+          <span style="font-weight: var(--font-medium); font-size: var(--text-sm);">Vendor Center</span>
           <iconify-icon
             icon="material-symbols:chevron-right"
-            width="20"
-            height="20"
+            width="16"
+            height="16"
             class="ml-auto transform transition-transform duration-200 {vendorCenterOpen ? 'rotate-90' : ''}"
+            style="color: {vendorCenterOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
           ></iconify-icon>
         </button>
         
-        <!-- Animated dropdown content -->
+        <!-- Modern dropdown content -->
         {#if vendorCenterOpen}
-          <div transition:slide={{duration: 200, easing: quintOut}}>
-            <ul class="pl-4 mt-1 space-y-1">
-              <li>
+          <div class="nav-dropdown" transition:slide={{duration: 200, easing: quintOut}} style="margin-top: var(--space-2);">
+            <ul style="padding: var(--space-2);">
+              <!-- APV -->
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/vendorCenter/apv/list"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/vendorCenter/apv') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/vendorCenter/apv') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/vendorCenter/apv/list')}
                 >
-                  <iconify-icon icon="material-symbols:description-outline-rounded" width="20" height="20" class="mr-2 {isActive('/vendorCenter/apv') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>APV</span>
+                  <iconify-icon 
+                    icon="material-symbols:description-outline-rounded" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/vendorCenter/apv') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">APV</span>
                   {#if isActive('/vendorCenter/apv')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               
               <!-- Vendor Payment -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/vendorCenter/payment/list"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/vendorCenter/payment') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/vendorCenter/payment') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/vendorCenter/payment/list')}
                 >
-                  <iconify-icon icon="material-symbols:account-balance-wallet-outline" width="20" height="20" class="mr-2 {isActive('/vendorCenter/payment') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Make Payment</span>
+                  <iconify-icon 
+                    icon="material-symbols:account-balance-wallet-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/vendorCenter/payment') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Make Payment</span>
                   {#if isActive('/vendorCenter/payment')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               
               <!-- Receiving Report -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/vendorCenter/receivingReport/list"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/vendorCenter/receivingReport') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/vendorCenter/receivingReport') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/vendorCenter/receivingReport/list')}
                 >
-                  <iconify-icon icon="material-symbols:inventory-2-outline" width="20" height="20" class="mr-2 {isActive('/vendorCenter/receivingReport') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Receiving Report</span>
+                  <iconify-icon 
+                    icon="material-symbols:inventory-2-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/vendorCenter/receivingReport') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Receiving Report</span>
                   {#if isActive('/vendorCenter/receivingReport')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
@@ -282,115 +399,164 @@ function updateViewportHeight() {
         {/if}
       </li>
       
-      <!-- Regular menu items with active state highlight -->
       <!-- Banking (simple item) -->
-      <li class="mb-1">
+      <li class="nav-item" style="margin-bottom: var(--space-2);">
         <a
           href="/banking"
-          class="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/banking') ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"
+          class="flex items-center transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {isActive('/banking') ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click|preventDefault={() => handleNav('/banking')}
         >
-          <iconify-icon icon="material-symbols:account-balance" width="22" height="22" class="mr-2 {isActive('/banking') ? 'text-blue-600' : ''}"></iconify-icon>
-          <span>Banking</span>
+          <iconify-icon 
+            icon="material-symbols:account-balance" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {isActive('/banking') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+          ></iconify-icon>
+          <span style="font-weight: var(--font-medium); font-size: var(--text-sm);">Banking</span>
           {#if isActive('/banking')}
-            <div class="ml-auto w-1.5 h-6 bg-blue-500 rounded-sm"></div>
+            <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
           {/if}
         </a>
       </li>
       
-      <!-- Reports section with dropdown -->
-      <li class="mb-1">
+      <!-- Reports section with modern dropdown styling -->
+      <li class="nav-item" style="margin-bottom: var(--space-2);">
         <button
           type="button"
-          class="flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg text-gray-700 group hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 {reportsOpen ? 'bg-blue-50 text-blue-700' : ''}"
+          class="flex items-center w-full transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {reportsOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click={() => reportsOpen = !reportsOpen}
           aria-expanded={reportsOpen}
         >
-          <iconify-icon icon="material-symbols:summarize" width="22" height="22" class="mr-2"></iconify-icon>
-          <span>Reports</span>
+          <iconify-icon 
+            icon="material-symbols:summarize" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {reportsOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+          ></iconify-icon>
+          <span style="font-weight: var(--font-medium); font-size: var(--text-sm);">Reports</span>
           <iconify-icon
             icon="material-symbols:chevron-right"
-            width="20"
-            height="20"
+            width="16"
+            height="16"
             class="ml-auto transform transition-transform duration-200 {reportsOpen ? 'rotate-90' : ''}"
+            style="color: {reportsOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
           ></iconify-icon>
         </button>
         
-        <!-- Animated dropdown for reports -->
+        <!-- Modern dropdown for reports -->
         {#if reportsOpen}
-          <div transition:slide={{duration: 200, easing: quintOut}}>
-            <ul class="pl-4 mt-1 space-y-1">
-              <!-- Financial Reports Section -->
-              <li>
+          <div class="nav-dropdown" transition:slide={{duration: 200, easing: quintOut}} style="margin-top: var(--space-2);">
+            <ul style="padding: var(--space-2);">
+              <!-- Balance Sheet -->
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/accounting/reports/balanceSheet"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/reports/balanceSheet') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/balanceSheet') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/reports/balanceSheet')}
                 >
-                  <iconify-icon icon="material-symbols:balance" width="20" height="20" class="mr-2 {isActive('/accounting/reports/balanceSheet') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Balance Sheet</span>
+                  <iconify-icon 
+                    icon="material-symbols:balance" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/balanceSheet') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Balance Sheet</span>
                   {#if isActive('/accounting/reports/balanceSheet')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               
               <!-- Income Statement -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/accounting/reports/incomeStatement"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/reports/incomeStatement') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/incomeStatement') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/reports/incomeStatement')}
                 >
-                  <iconify-icon icon="material-symbols:insert-chart-outline" width="20" height="20" class="mr-2 {isActive('/accounting/reports/incomeStatement') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Income Statement</span>
+                  <iconify-icon 
+                    icon="material-symbols:insert-chart-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/incomeStatement') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Income Statement</span>
                   {#if isActive('/accounting/reports/incomeStatement')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               
               <!-- Trial Balance -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/accounting/reports/trialBalance"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/reports/trialBalance') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/trialBalance') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/reports/trialBalance')}
                 >
-                  <iconify-icon icon="material-symbols:fact-check-outline" width="20" height="20" class="mr-2 {isActive('/accounting/reports/trialBalance') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Trial Balance</span>
+                  <iconify-icon 
+                    icon="material-symbols:fact-check-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/trialBalance') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Trial Balance</span>
                   {#if isActive('/accounting/reports/trialBalance')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               
               <!-- A/R Aging -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/accounting/reports/arAging"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/reports/arAging') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/arAging') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/reports/arAging')}
                 >
-                  <iconify-icon icon="material-symbols:pending-actions" width="20" height="20" class="mr-2 {isActive('/accounting/reports/arAging') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>A/R Aging</span>
+                  <iconify-icon 
+                    icon="material-symbols:pending-actions" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/arAging') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">A/R Aging</span>
                   {#if isActive('/accounting/reports/arAging')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               
               <!-- A/P Aging -->
-              <li>
+              <li style="margin-bottom: var(--space-1);">
                 <a
                   href="/accounting/reports/apAging"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/reports/apAging') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/apAging') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/reports/apAging')}
                 >
-                  <iconify-icon icon="material-symbols:calendar-month-outline" width="20" height="20" class="mr-2 {isActive('/accounting/reports/apAging') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>A/P Aging</span>
+                  <iconify-icon 
+                    icon="material-symbols:calendar-month-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/apAging') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">A/P Aging</span>
                   {#if isActive('/accounting/reports/apAging')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
@@ -400,37 +566,52 @@ function updateViewportHeight() {
       </li>
       
       <!-- Inventory with dropdown -->
-      <li class="mb-1">
+      <li style="margin-bottom: var(--space-2);">
         <button
           type="button"
-          class="flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg text-gray-700 group hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 {inventoryOpen ? 'bg-blue-50 text-blue-700' : ''}"
+          class="nav-item flex items-center w-full transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {inventoryOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
           on:click={() => inventoryOpen = !inventoryOpen}
           aria-expanded={inventoryOpen}
         >
-          <iconify-icon icon="material-symbols:inventory" width="22" height="22" class="mr-2"></iconify-icon>
+          <iconify-icon 
+            icon="material-symbols:inventory" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {inventoryOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-500)'}"
+          ></iconify-icon>
           <span>Inventory</span>
           <iconify-icon
             icon="material-symbols:chevron-right"
-            width="20"
-            height="20"
+            width="18"
+            height="18"
             class="ml-auto transform transition-transform duration-200 {inventoryOpen ? 'rotate-90' : ''}"
+            style="color: {inventoryOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
           ></iconify-icon>
         </button>
         
         <!-- Animated dropdown content -->
         {#if inventoryOpen}
           <div transition:slide={{duration: 200, easing: quintOut}}>
-            <ul class="pl-4 mt-1 space-y-1">
+            <ul class="nav-dropdown" style="padding-left: var(--space-4); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
               <li>
                 <a
                   href="/inventory/adjustment/list"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/inventory/adjustment') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/inventory/adjustment') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/inventory/adjustment/list')}
                 >
-                  <iconify-icon icon="material-symbols:inventory-2-outline" width="20" height="20" class="mr-2 {isActive('/inventory/adjustment') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Inventory Adjustment</span>
+                  <iconify-icon 
+                    icon="material-symbols:inventory-2-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/inventory/adjustment') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Inventory Adjustment</span>
                   {#if isActive('/inventory/adjustment')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
@@ -440,89 +621,132 @@ function updateViewportHeight() {
       </li>
       
       <!-- Accounting with dropdown -->
-      <li class="mb-1">
+      <li style="margin-bottom: var(--space-2);">
         <button
           type="button"
-          class="flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg text-gray-700 group hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 {accountingOpen ? 'bg-blue-50 text-blue-700' : ''}"
+          class="nav-item flex items-center w-full transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {accountingOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
           on:click={() => accountingOpen = !accountingOpen}
           aria-expanded={accountingOpen}
         >
-          <iconify-icon icon="material-symbols:calculate" width="22" height="22" class="mr-2"></iconify-icon>
+          <iconify-icon 
+            icon="material-symbols:calculate" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {accountingOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-500)'}"
+          ></iconify-icon>
           <span>Accounting</span>
           <iconify-icon
             icon="material-symbols:chevron-right"
-            width="20"
-            height="20"
+            width="18"
+            height="18"
             class="ml-auto transform transition-transform duration-200 {accountingOpen ? 'rotate-90' : ''}"
+            style="color: {accountingOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
           ></iconify-icon>
         </button>
         
         <!-- Animated dropdown content -->
         {#if accountingOpen}
           <div transition:slide={{duration: 200, easing: quintOut}}>
-            <ul class="pl-4 mt-1 space-y-1">
+            <ul class="nav-dropdown" style="padding-left: var(--space-4); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
               <li>
                 <a
                   href="/masterlist/accounts"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/masterlist/accounts') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/accounts') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/masterlist/accounts')}
                 >
-                  <iconify-icon icon="material-symbols:menu-book-outline-rounded" width="20" height="20" class="mr-2 {isActive('/masterlist/accounts') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Chart of Accounts</span>
+                  <iconify-icon 
+                    icon="material-symbols:menu-book-outline-rounded" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/accounts') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Chart of Accounts</span>
                   {#if isActive('/masterlist/accounts')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/accounting/generalJournal/list"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/generalJournal') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/generalJournal') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/generalJournal/list')}
                 >
-                  <iconify-icon icon="material-symbols:note-add-outline" width="20" height="20" class="mr-2 {isActive('/accounting/generalJournal') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>General Journal</span>
+                  <iconify-icon 
+                    icon="material-symbols:note-add-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/generalJournal') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">General Journal</span>
                   {#if isActive('/accounting/generalJournal')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/accounting/periodClosing"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/periodClosing') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/periodClosing') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/periodClosing')}
                 >
-                  <iconify-icon icon="material-symbols:lock-outline" width="20" height="20" class="mr-2 {isActive('/accounting/periodClosing') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Period Closing</span>
+                  <iconify-icon 
+                    icon="material-symbols:lock-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/periodClosing') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Period Closing</span>
                   {#if isActive('/accounting/periodClosing')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/accounting/taxReporting"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/taxReporting') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/taxReporting') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/taxReporting')}
                 >
-                  <iconify-icon icon="material-symbols:receipt-long-outline" width="20" height="20" class="mr-2 {isActive('/accounting/taxReporting') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Tax Reporting</span>
+                  <iconify-icon 
+                    icon="material-symbols:receipt-long-outline" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/taxReporting') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Tax Reporting</span>
                   {#if isActive('/accounting/taxReporting')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/accounting/auditTrail"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/accounting/auditTrail') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/auditTrail') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/accounting/auditTrail')}
                 >
-                  <iconify-icon icon="material-symbols:history" width="20" height="20" class="mr-2 {isActive('/accounting/auditTrail') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Audit Trail</span>
+                  <iconify-icon 
+                    icon="material-symbols:history" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/auditTrail') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Audit Trail</span>
                   {#if isActive('/accounting/auditTrail')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
@@ -532,89 +756,132 @@ function updateViewportHeight() {
       </li>
       
       <!-- Masterlist with animation -->
-      <li class="mb-1">
+      <li style="margin-bottom: var(--space-2);">
         <button
           type="button"
-          class="flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg text-gray-700 group hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 {masterlistOpen ? 'bg-blue-50 text-blue-700' : ''}"
+          class="nav-item flex items-center w-full transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {masterlistOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
           on:click={() => masterlistOpen = !masterlistOpen}
           aria-expanded={masterlistOpen}
         >
-          <iconify-icon icon="material-symbols:grid-view-rounded" width="22" height="22" class="mr-2"></iconify-icon>
+          <iconify-icon 
+            icon="material-symbols:grid-view-rounded" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {masterlistOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-500)'}"
+          ></iconify-icon>
           <span>Masterlist</span>
           <iconify-icon
             icon="material-symbols:chevron-right"
-            width="20"
-            height="20"
+            width="18"
+            height="18"
             class="ml-auto transform transition-transform duration-200 {masterlistOpen ? 'rotate-90' : ''}"
+            style="color: {masterlistOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
           ></iconify-icon>
         </button>
         
         <!-- Animated dropdown content -->
         {#if masterlistOpen}
           <div transition:slide={{duration: 200, easing: quintOut}}>
-            <ul class="pl-4 mt-1 space-y-1">
+            <ul class="nav-dropdown" style="padding-left: var(--space-4); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
               <li>
                 <a
                   href="/masterlist/accounts"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/masterlist/accounts') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/accounts') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/masterlist/accounts')}
                 >
-                  <iconify-icon icon="material-symbols:menu-book-outline-rounded" width="20" height="20" class="mr-2 {isActive('/masterlist/accounts') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Chart of Accounts</span>
+                  <iconify-icon 
+                    icon="material-symbols:menu-book-outline-rounded" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/accounts') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Chart of Accounts</span>
                   {#if isActive('/masterlist/accounts')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/masterlist/items"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/masterlist/items') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/items') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/masterlist/items')}
                 >
-                  <iconify-icon icon="material-symbols:inventory-2-rounded" width="20" height="20" class="mr-2 {isActive('/masterlist/items') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Items</span>
+                  <iconify-icon 
+                    icon="material-symbols:inventory-2-rounded" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/items') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Items</span>
                   {#if isActive('/masterlist/items')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/masterlist/customers"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/masterlist/customers') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/customers') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/masterlist/customers')}
                 >
-                  <iconify-icon icon="material-symbols:group-rounded" width="20" height="20" class="mr-2 {isActive('/masterlist/customers') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Customers</span>
+                  <iconify-icon 
+                    icon="material-symbols:group-rounded" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/customers') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Customers</span>
                   {#if isActive('/masterlist/customers')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/masterlist/vendors"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/masterlist/vendors') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/vendors') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/masterlist/vendors')}
                 >
-                  <iconify-icon icon="material-symbols:store-rounded" width="20" height="20" class="mr-2 {isActive('/masterlist/vendors') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Vendors</span>
+                  <iconify-icon 
+                    icon="material-symbols:store-rounded" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/vendors') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Vendors</span>
                   {#if isActive('/masterlist/vendors')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/masterlist/others"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/masterlist/others') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/others') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/masterlist/others')}
                 >
-                  <iconify-icon icon="material-symbols:image-rounded" width="20" height="20" class="mr-2 {isActive('/masterlist/others') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Other Name</span>
+                  <iconify-icon 
+                    icon="material-symbols:image-rounded" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/others') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Other Name</span>
                   {#if isActive('/masterlist/others')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
@@ -624,115 +891,172 @@ function updateViewportHeight() {
       </li>
       
       <!-- Other List with animation -->
-      <li class="mb-1">
+      <li style="margin-bottom: var(--space-2);">
         <button
           type="button"
-          class="flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg text-gray-700 group hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 {otherlistOpen ? 'bg-blue-50 text-blue-700' : ''}"
+          class="nav-item flex items-center w-full transition-all duration-200 group"
+          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {otherlistOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
           on:click={() => otherlistOpen = !otherlistOpen}
           aria-expanded={otherlistOpen}
         >
-          <iconify-icon icon="material-symbols:settings-rounded" width="22" height="22" class="mr-2"></iconify-icon>
+          <iconify-icon 
+            icon="material-symbols:settings-rounded" 
+            width="20" 
+            height="20" 
+            class="mr-3 transition-colors duration-200"
+            style="color: {otherlistOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-500)'}"
+          ></iconify-icon>
           <span>Other List</span>
           <iconify-icon
             icon="material-symbols:chevron-right"
-            width="20"
-            height="20"
+            width="18"
+            height="18"
             class="ml-auto transform transition-transform duration-200 {otherlistOpen ? 'rotate-90' : ''}"
+            style="color: {otherlistOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
           ></iconify-icon>
         </button>
         
         <!-- Animated dropdown content -->
         {#if otherlistOpen}
           <div transition:slide={{duration: 200, easing: quintOut}}>
-            <ul class="pl-4 mt-1 space-y-1">
+            <ul class="nav-dropdown" style="padding-left: var(--space-4); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
               <li>
                 <a
                   href="/otherlist/categories"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/otherlist/categories') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/otherlist/categories') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/otherlist/categories')}
                 >
-                  <iconify-icon icon="material-symbols:category" width="20" height="20" class="mr-2 {isActive('/otherlist/categories') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Categories</span>
+                  <iconify-icon 
+                    icon="material-symbols:category" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/otherlist/categories') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Categories</span>
                   {#if isActive('/otherlist/categories')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/otherlist/units"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/otherlist/units') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/otherlist/units') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/otherlist/units')}
                 >
-                  <iconify-icon icon="material-symbols:straighten" width="20" height="20" class="mr-2 {isActive('/otherlist/units') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Units</span>
+                  <iconify-icon 
+                    icon="material-symbols:straighten" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/otherlist/units') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Units</span>
                   {#if isActive('/otherlist/units')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/otherlist/locations"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/otherlist/locations') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/otherlist/locations') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/otherlist/locations')}
                 >
-                  <iconify-icon icon="material-symbols:location-on" width="20" height="20" class="mr-2 {isActive('/otherlist/locations') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Locations</span>
+                  <iconify-icon 
+                    icon="material-symbols:location-on" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/otherlist/locations') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Locations</span>
                   {#if isActive('/otherlist/locations')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/otherlist/discounts"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/otherlist/discounts') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/otherlist/discounts') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/otherlist/discounts')}
                 >
-                  <iconify-icon icon="material-symbols:percent" width="20" height="20" class="mr-2 {isActive('/otherlist/discounts') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Discounts</span>
+                  <iconify-icon 
+                    icon="material-symbols:percent" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/otherlist/discounts') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Discounts</span>
                   {#if isActive('/otherlist/discounts')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/otherlist/paymentmethods"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/otherlist/paymentmethods') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/otherlist/paymentmethods') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/otherlist/paymentmethods')}
                 >
-                  <iconify-icon icon="material-symbols:payments" width="20" height="20" class="mr-2 {isActive('/otherlist/paymentmethods') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Payment Methods</span>
+                  <iconify-icon 
+                    icon="material-symbols:payments" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/otherlist/paymentmethods') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Payment Methods</span>
                   {#if isActive('/otherlist/paymentmethods')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/otherlist/terms"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/otherlist/terms') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/otherlist/terms') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/otherlist/terms')}
                 >
-                  <iconify-icon icon="material-symbols:calendar-month" width="20" height="20" class="mr-2 {isActive('/otherlist/terms') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Terms</span>
+                  <iconify-icon 
+                    icon="material-symbols:calendar-month" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/otherlist/terms') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Terms</span>
                   {#if isActive('/otherlist/terms')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
               <li>
                 <a
                   href="/otherlist/tax"
-                  class="flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 {isActive('/otherlist/tax') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 group'}"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/otherlist/tax') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
                   on:click|preventDefault={() => handleNav('/otherlist/tax')}
                 >
-                  <iconify-icon icon="material-symbols:percent" width="20" height="20" class="mr-2 {isActive('/otherlist/tax') ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}"></iconify-icon>
-                  <span>Tax</span>
+                  <iconify-icon 
+                    icon="material-symbols:percent" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/otherlist/tax') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Tax</span>
                   {#if isActive('/otherlist/tax')}
-                    <div class="ml-auto w-1 h-5 bg-blue-500 rounded-sm"></div>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>
               </li>
