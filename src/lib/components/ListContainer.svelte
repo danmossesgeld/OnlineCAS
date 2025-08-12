@@ -416,21 +416,28 @@
       </div>
     </div>
     
-    <!-- Directly include DocumentSummary functionality -->
+    <!-- Summary Cards Section -->
     <div class="w-full mb-6">
-      <div class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-5 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {#each summaryCards as card, i}
-          <div class="flex flex-col p-4 border-l-4 rounded-lg border-{card.colorClass}-500 bg-{card.colorClass}-50">
-            <div class="flex items-center mb-1">
-              <iconify-icon icon={card.icon} width="20" height="20" class="text-{card.colorClass}-600 mr-2"></iconify-icon>
-              <span class="text-sm font-medium text-{card.colorClass}-700">{card.label}</span>
+          {@const variant = i === 0 ? 'primary' : 
+                           i === 1 ? 'success' : 
+                           i === 2 ? 'warning' : 
+                           i === 3 ? 'primary' : 'error'}
+          
+          <div class="summary-card compact {variant}">
+            <div class="summary-card-content">
+              <div class="summary-card-header">
+                <h3 class="summary-card-label">{card.label}</h3>
+                <div class="summary-card-icon">
+                  <iconify-icon icon={card.icon} width="16" height="16"></iconify-icon>
+                </div>
+              </div>
+              <div class="summary-card-value">{card.value}</div>
+              {#if card.sub}
+                <div class="summary-card-subtext">{card.sub}</div>
+              {/if}
             </div>
-            <div class="mt-1">
-              <span class="text-xl font-bold text-{card.colorClass}-800">{card.value}</span>
-            </div>
-            {#if card.sub}
-              <p class="text-xs text-{card.colorClass}-600 mt-1">{card.sub}</p>
-            {/if}
           </div>
         {/each}
       </div>
