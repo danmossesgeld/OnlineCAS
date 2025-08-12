@@ -19,7 +19,8 @@
     <h1 class="text-2xl md:text-3xl font-bold text-gray-800">{title}</h1>
   </div>
   
-  <form on:submit|preventDefault class="flex flex-col flex-1 h-full w-full">
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <form on:submit|preventDefault on:keydown class="flex flex-col flex-1 h-full w-full">
     <div class="bg-white rounded-xl shadow-sm p-4 flex flex-col flex-1">
       <slot></slot>
     </div>
