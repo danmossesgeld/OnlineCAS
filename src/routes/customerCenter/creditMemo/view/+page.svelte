@@ -4,11 +4,78 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { formatCurrency, formatDate } from '$lib/utils/formatters';
+  import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
 
   let loading = true;
   let creditMemoData: any = null;
   let error: string | null = null;
   let accountingEntries: any[] = [];
+  let taxTypeOptions: { label: string; value: string; raw?: any }[] = [];
+  let itemOptions: { label: string; value: string; raw?: any }[] = [];
+  let unitOptions: { label: string; value: string; raw?: any }[] = [];
+
+  // Load tax types (with raw to access rate) so we can resolve tax IDs/rates in view mode
+  createFirestoreOptionsStore('tax', 'name', 'id', true).subscribe((opts) => (taxTypeOptions = opts));
+  // Load items and units for resolving names from IDs
+  createFirestoreOptionsStore('items', 'name', 'id', true).subscribe((opts) => (itemOptions = opts));
+  createFirestoreOptionsStore('units', 'name', 'id', true).subscribe((opts) => (unitOptions = opts));
+
+  function getTaxTypeLabel(taxType: any): string {
+    if (!taxType) return '-';
+    if (typeof taxType === 'object') return taxType.name ?? taxType.label ?? taxType.id ?? '-';
+    if (taxType === 'vatable') return 'VAT';
+    if (taxType === 'zero') return 'Zero-Rated';
+    if (taxType === 'exempt') return 'Exempt';
+    const found = taxTypeOptions.find((o) => String(o.value) === String(taxType));
+    return found?.label || String(taxType);
+  }
+
+  function getTaxRateFromOptionId(taxTypeId: any): number {
+    if (!taxTypeId) return 0;
+    // Handle legacy string categories
+    if (taxTypeId === 'vatable') return 0.12; // default 12% when only category stored
+    if (taxTypeId === 'zero' || taxTypeId === 'exempt') return 0;
+    const found = taxTypeOptions.find((opt) => String(opt.value) === String(taxTypeId));
+    if (!found) return 0;
+    const raw: any = (found as any).raw;
+    if (raw && typeof raw.rate === 'number') return raw.rate;
+    const match = found.label?.match(/(\d+(?:\.\d+)?)%?/);
+    return match ? parseFloat(match[1]) / 100 : 0;
+  }
+
+  // Computed amounts for display when saved document lacks aggregated fields
+  $: computedNetSales = creditMemoData?.items?.reduce((sum: number, i: any) => {
+    const base = (i?.amount ?? ((i?.quantity || 0) * (i?.unitPrice || 0))) || 0;
+    return sum + base;
+  }, 0) || 0;
+
+  $: computedVat = creditMemoData?.items?.reduce((sum: number, i: any) => {
+    const base = (i?.amount ?? ((i?.quantity || 0) * (i?.unitPrice || 0))) || 0;
+    const rate = getTaxRateFromOptionId(i?.taxType);
+    return sum + base * rate;
+  }, 0) || 0;
+
+  $: withholdingRate = parseFloat(creditMemoData?.withholdingTax || '0') / 100;
+  $: computedLessWithholding = computedNetSales * (withholdingRate || 0);
+  $: computedTotal = computedNetSales + computedVat - computedLessWithholding;
+
+  function getItemLabel(item: any): string {
+    if (!item) return '-';
+    if (item.itemName) return item.itemName;
+    const val = typeof item.itemId === 'object' ? (item.itemId?.name ?? item.itemId?.label ?? item.itemId?.id) : item.itemId;
+    if (!val) return '-';
+    const found = itemOptions.find((o) => String(o.value) === String(val));
+    return found?.label || String(val);
+  }
+
+  function getUnitLabel(item: any): string {
+    if (!item) return '-';
+    if (item.unitName) return item.unitName;
+    const val = typeof item.unit === 'object' ? (item.unit?.name ?? item.unit?.label ?? item.unit?.id) : item.unit;
+    if (!val) return '-';
+    const found = unitOptions.find((o) => String(o.value) === String(val));
+    return found?.label || String(val);
+  }
 
   onMount(async () => {
     const id = $page.url.searchParams.get('id');
@@ -20,7 +87,7 @@
 
     try {
       // Load the credit memo data
-      creditMemoData = await getDocFromCollection('customerCenter/creditMemos', id);
+      creditMemoData = await getDocFromCollection('transactions/customerCenter/creditMemos', id);
       if (!creditMemoData) {
         throw new Error('Credit Memo not found');
       }
@@ -28,8 +95,8 @@
       // Load associated journal entries if they exist
       if (creditMemoData.journalEntryId) {
         const journalEntry = await getDocFromCollection('accounting/journalEntries', creditMemoData.journalEntryId);
-        if (journalEntry && journalEntry.lines) {
-          accountingEntries = journalEntry.lines;
+        if (journalEntry && (journalEntry as any).lines) {
+          accountingEntries = (journalEntry as any).lines;
         }
       }
       
@@ -113,10 +180,6 @@
                 <span class="text-gray-600">Status:</span>
                 <span class="font-medium text-gray-800">{creditMemoData.status || 'Draft'}</span>
               </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">Invoice No.:</span>
-                <span class="font-medium text-gray-800">{creditMemoData.invoiceNo || '-'}</span>
-              </div>
             </div>
           </div>
           <div>
@@ -127,12 +190,8 @@
                 <span class="font-medium text-gray-800">{creditMemoData.reference || '-'}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-600">Created At:</span>
-                <span class="font-medium text-gray-800">{formatDate(creditMemoData.createdAt)}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">Updated At:</span>
-                <span class="font-medium text-gray-800">{formatDate(creditMemoData.updatedAt)}</span>
+                <span class="text-gray-600">Last Updated:</span>
+                <span class="font-medium text-gray-800">{formatDate(creditMemoData.updatedAt || creditMemoData.createdAt)}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Memo:</span>
@@ -159,33 +218,53 @@
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Type</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               {#each creditMemoData.items as item}
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{item.itemName || '-'}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {getItemLabel(item)}
+                  </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{item.description || '-'}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{item.quantity} {item.unitName || ''}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{item.unitName || '-'}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{formatCurrency(item.unitPrice)}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{formatCurrency(item.amount)}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
+                    {item.quantity}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    {getUnitLabel(item)}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">{formatCurrency(item.unitPrice)}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    {item.taxTypeName || getTaxTypeLabel(item.taxType)}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">{formatCurrency(item.quantity * item.unitPrice)}</td>
                 </tr>
               {/each}
             </tbody>
             <tfoot class="bg-gray-50">
               <tr>
-                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="5">Subtotal:</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{formatCurrency(creditMemoData.subtotal)}</td>
+                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="6">Subtotal:</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">{formatCurrency(creditMemoData.subtotal || 0)}</td>
               </tr>
               <tr>
-                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="5">Tax ({creditMemoData.taxRate}%):</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{formatCurrency(creditMemoData.taxAmount)}</td>
+                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="6">
+                  {creditMemoData.taxRate ? `VAT (${creditMemoData.taxRate}%):` : 'VAT:'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                  {formatCurrency(creditMemoData.taxAmount && creditMemoData.taxAmount > 0 ? creditMemoData.taxAmount : computedVat)}
+                </td>
               </tr>
+              {#if creditMemoData.withholdingTax}
+                <tr>
+                  <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="6">Less: Withholding Tax ({creditMemoData.withholdingTax}%):</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600 text-right">-{formatCurrency((creditMemoData.subtotal || 0) * (parseFloat(creditMemoData.withholdingTax) / 100))}</td>
+                </tr>
+              {/if}
               <tr>
-                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="5">Total:</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">{formatCurrency(creditMemoData.totalAmount)}</td>
+                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="6">Total Amount:</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-right">{formatCurrency(creditMemoData.totalAmount && creditMemoData.totalAmount > 0 ? creditMemoData.totalAmount : computedTotal)}</td>
               </tr>
             </tfoot>
           </table>

@@ -33,8 +33,8 @@
   export let withholdingRate: number = 0.01;
   export let withholdingLabel: string = 'Less: Withholding Tax';
   export let withholdingTax: string = '';
-  export let cashSale: boolean = false;
   export let withholdingTaxOptions: Array<{ label: string; value: any }> = [];
+  export let totalLabel: string = 'Total Amount Due';
   export let grossAmount: number | undefined = undefined;
   export let discount: number | undefined = undefined;
   export let netSales: number | undefined = undefined;
@@ -53,8 +53,11 @@
   $: computedZeroRated = lineItems.filter(i => i.taxType === 'zero').reduce((sum, i) => sum + (i.amount || 0), 0);
   $: computedVatExempt = lineItems.filter(i => i.taxType === 'exempt').reduce((sum, i) => sum + (i.amount || 0), 0);
   $: computedVat = computedVatableSales * vatRate;
-  $: computedWithholding = computedNetSales * withholdingRate;
-  $: computedTotalDue = computedNetSales + computedVat - computedWithholding;
+  // Use the effective net value (provided or computed) for downstream calcs
+  // Use the actual withholding tax percentage from the form, not the default rate
+  $: effectiveWithholdingRate = withholdingTax ? parseFloat(withholdingTax) / 100 : withholdingRate;
+  $: computedWithholding = (netSales ?? computedNetSales) * effectiveWithholdingRate;
+  $: computedTotalDue = (netSales ?? computedNetSales) + (vat ?? computedVat) - computedWithholding;
 
   // Use provided values or computed values
   $: gross = grossAmount ?? computedGross;
@@ -78,20 +81,14 @@
           <div class="p-0">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Summary</h2>
             
-            <!-- Withholding Tax and Cash Sale Settings -->
-            <div class="flex flex-wrap mb-4">
-              <div class="w-full lg:w-3/5 lg:pr-4 mb-3 lg:mb-0">
-                <label for="withholding-tax" class="block mb-1 text-sm font-medium text-gray-700">Withholding Tax (%)</label>
-                <select id="withholding-tax" class="w-full px-3 py-2 text-sm {readOnly ? 'bg-gray-100' : 'bg-gray-50'} border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400" bind:value={withholdingTax} disabled={readOnly}>
-                  {#each withholdingTaxOptions as opt}
-                    <option value={opt.value}>{opt.label}</option>
-                  {/each}
-                </select>
-              </div>
-              <div class="w-full lg:w-2/5 flex items-center lg:mt-7">
-                <label for="cash-sale" class="text-sm font-medium text-gray-700 cursor-pointer flex-1">Cash Sale</label>
-                <input id="cash-sale" type="checkbox" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" bind:checked={cashSale} disabled={readOnly}>
-              </div>
+            <!-- Withholding Tax Settings -->
+            <div class="mb-4">
+              <label for="withholding-tax" class="block mb-1 text-sm font-medium text-gray-700">Withholding Tax (%)</label>
+              <select id="withholding-tax" class="w-full px-3 py-2 text-sm {readOnly ? 'bg-gray-100' : 'bg-gray-50'} border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400" bind:value={withholdingTax} disabled={readOnly}>
+                {#each withholdingTaxOptions as opt}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
             </div>
             
             <!-- Summary Values - Two Column Layout -->
@@ -143,7 +140,7 @@
               <div class="flex justify-between font-bold mt-4 pt-3 border-t border-gray-300 items-center">
                 <span class="flex items-center">
                   <iconify-icon icon="material-symbols:payments" width="24" height="24" class="mr-2 text-green-600"></iconify-icon> 
-                  <span class="text-lg">Total Amount Due:</span>
+                  <span class="text-lg">{totalLabel}:</span>
                 </span>
                 <span class="text-green-600 bg-green-50 px-4 py-2 rounded-lg border border-green-200 text-lg">₱{total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
               </div>

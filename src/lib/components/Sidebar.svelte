@@ -96,6 +96,21 @@ function updateViewportHeight() {
     transition: all var(--transition-normal);
   }
 
+  /* Force a visible hover state even when inline styles are present */
+  .nav-item:hover,
+  .nav-dropdown a:hover,
+  .nav-dropdown button:hover {
+    background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)) !important;
+    color: var(--color-primary-700) !important;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .nav-item:hover iconify-icon,
+  .nav-dropdown a:hover iconify-icon,
+  .nav-dropdown button:hover iconify-icon {
+    color: var(--color-primary-600) !important;
+  }
+
   .nav-item::before {
     content: '';
     position: absolute;
@@ -171,10 +186,10 @@ function updateViewportHeight() {
       <!-- Dashboard - enhanced styling -->
       <li class="nav-item {isActive('/main') ? 'active' : ''}" style="margin-bottom: var(--space-2);">
         <a
-          href="/main"
+          href="/main/dashboard"
           class="flex items-center transition-all duration-200 group"
           style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {isActive('/main') ? 'background: linear-gradient(135deg, var(--color-primary-100), var(--color-primary-50)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
-          on:click|preventDefault={() => handleNav('/main')}
+          on:click|preventDefault={() => handleNav('/main/dashboard')}
         >
           <iconify-icon 
             icon="material-symbols:dashboard" 
@@ -738,14 +753,34 @@ function updateViewportHeight() {
                   on:click|preventDefault={() => handleNav('/accounting/auditTrail')}
                 >
                   <iconify-icon 
-                    icon="material-symbols:history" 
+                    icon="material-symbols:receipt-long" 
                     width="16" 
                     height="16" 
                     class="mr-2 transition-colors duration-200"
                     style="color: {isActive('/accounting/auditTrail') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
                   ></iconify-icon>
-                  <span style="font-weight: var(--font-medium);">Audit Trail</span>
+                  <span style="font-weight: var(--font-medium);">Transaction Journal</span>
                   {#if isActive('/accounting/auditTrail')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/accounting/auditor"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/auditor') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/accounting/auditor')}
+                >
+                  <iconify-icon 
+                    icon="material-symbols:security" 
+                    width="16" 
+                    height="16" 
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/auditor') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Data Auditor</span>
+                  {#if isActive('/accounting/auditor')}
                     <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>

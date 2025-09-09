@@ -1,7 +1,12 @@
 <script lang="ts">
   import MasterListContainer from '$lib/components/MasterListContainer.svelte';
   import ModalForm from '$lib/components/ModalForm.svelte';
-  import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { addDocToCollection, updateDocInCollection, deleteDocFromCollection, queryCollectionDocs } from '$lib/utils/firestoreCrud';
+  import { parseCSVToRecords } from '$lib/utils/csvParser';
+  import { readFileAsTextSmart } from '$lib/utils/fileEncoding';
+  import { exportNestedFirestoreCollectionToCSV, type ExportColumn } from '$lib/utils/csvExporter';
+  import { orderBy } from 'firebase/firestore';
+  import type { QueryConstraint } from 'firebase/firestore';
 
   // Config for form fields
   $: customerFields = [
@@ -22,6 +27,8 @@
     { label: 'Contact Person', key: 'contact_person' },
     { label: 'Phone', key: 'phone' },
     { label: 'Email', key: 'email' },
+    { label: 'Billing Address', key: 'billing_address' },
+    { label: 'Shipping Address', key: 'shipping_address' },
     { label: 'Tax ID', key: 'tax_id' },
     { label: 'Status', key: 'is_active', format: (value: boolean) => value ? 'Active' : 'Inactive' }
   ];
@@ -32,11 +39,14 @@
   const subCollectionName = 'customers';
   const collectionPath = 'masterlist/customers';
   
+  // Default sort by code
+  const queryOptions: QueryConstraint[] = [orderBy('code')];
+  
   // ListContainer configuration
   const documentType = 'customer';
   const title = 'Customer Masterlist';
   const subtitle = 'Manage your customers and their information';
-  const primaryColorClass = 'blue';
+  const primaryColorClass = 'indigo';
   let showModal = false;
   let errorMsg = '';
   let formData = { 
@@ -58,6 +68,99 @@
       color: 'primary',
       icon: 'material-symbols:add',
       onClick: () => { showModal = true; editingItem = null; formData = { code: '', name: '', contact_person: '', phone: '', email: '', billing_address: '', shipping_address: '', tax_id: '', is_active: true }; errorMsg = ''; }
+    },
+    {
+      label: 'Import CSV',
+      color: 'outline',
+      icon: 'material-symbols:upload',
+      onClick: () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.csv';
+        input.onchange = async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const text = await readFileAsTextSmart(file);
+          
+          const records = parseCSVToRecords(text);
+          
+          // Wipe existing collection before importing new records
+          if (confirm('Importing will delete all existing customers in this list. Continue?')) {
+            try {
+              const existing = await queryCollectionDocs(collectionPath);
+              if (existing && existing.length > 0) {
+                for (const doc of existing) {
+                  try { await deleteDocFromCollection(collectionPath, doc.id); } catch (e) { console.warn('Delete failed for', doc.id, e); }
+                }
+              }
+            } catch (e) {
+              console.error('Error deleting existing customers:', e);
+            }
+          } else {
+            return;
+          }
+          
+          for (const rec of records) {
+            const payload = {
+              code: rec.code || rec.customer_code || '',
+              name: rec.name || rec.customer_name || '',
+              contact_person: rec.contact_person || '',
+              phone: rec.phone || '',
+              email: rec.email || '',
+              billing_address: rec.billing_address || '',
+              shipping_address: rec.shipping_address || '',
+              tax_id: rec.tax_id || rec.tin || '',
+              is_active: String(rec.is_active).toLowerCase() !== 'false',
+              created_at: new Date(),
+              updated_at: new Date()
+            };
+            
+            if (payload.code && payload.name) {
+              try { 
+                await addDocToCollection(collectionPath, payload);
+              } catch (error) {
+                console.error('Error saving:', error);
+              }
+            }
+          }
+          alert('Customer import finished. Check console for debug info.');
+        };
+        input.click();
+      }
+    },
+    {
+      label: 'Sample CSV',
+      color: 'outline',
+      icon: 'material-symbols:description',
+      onClick: () => {
+        const sample = 'code,name,contact_person,phone,email,billing_address,shipping_address,tax_id,is_active\nCUST-001,Acme Corporation,Jane Smith,09171234567,jane.smith@acmecorp.com,"Unit 123, Business Center, Makati City, Metro Manila","Unit 123, Business Center, Makati City, Metro Manila",123-456-789-000,true\nCUST-002,Global Tech Solutions,Michael Johnson,09181234567,michael@globaltech.ph,"5th Floor, IT Building, BGC, Taguig City","Warehouse A, Industrial Park, Laguna",987-654-321-000,true\nCUST-003,Manila Trading Inc,Maria Santos,09191234567,maria.santos@manilatrading.com,"Room 456, Trade Center, Binondo, Manila","Storage Facility, Pasig City, Metro Manila",456-789-123-000,true\nCUST-004,Cebu Retail Group,Carlos Rodriguez,09321234567,carlos@ceburetail.com,"Ground Floor, Mall Complex, Cebu City","Distribution Center, Mandaue City, Cebu",789-123-456-000,true\nCUST-005,Davao Enterprises,Ana Dela Cruz,09821234567,ana@davaoent.ph,"Building 7, Commercial District, Davao City","Same as billing address",321-654-987-000,true\nCUST-006,Baguio Mountain Goods,Roberto Fernandez,09741234567,roberto@baguiogoods.com,"Session Road, Baguio City, Benguet","Warehouse B, La Trinidad, Benguet",654-987-321-000,false';
+        const blob = new Blob([sample], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'customers_sample.csv'; a.click();
+        URL.revokeObjectURL(url);
+      }
+    },
+    {
+      label: 'Export CSV',
+      color: 'outline',
+      icon: 'material-symbols:download',
+      onClick: async () => {
+        const exportColumns: ExportColumn[] = [
+          { key: 'code', label: 'Code' },
+          { key: 'name', label: 'Name' },
+          { key: 'contact_person', label: 'Contact Person' },
+          { key: 'phone', label: 'Phone' },
+          { key: 'email', label: 'Email' },
+          { key: 'billing_address', label: 'Billing Address' },
+          { key: 'shipping_address', label: 'Shipping Address' },
+          { key: 'tax_id', label: 'Tax ID' },
+          { key: 'is_active', label: 'Active', format: (value: boolean) => value ? 'true' : 'false' }
+        ];
+        
+        const filename = `customers_export_${new Date().toISOString().split('T')[0]}.csv`;
+        await exportNestedFirestoreCollectionToCSV(rootCollection, parentCollection, subCollectionName, exportColumns, filename, 'code');
+      }
     }
   ];
 
@@ -164,7 +267,7 @@
     {primaryColorClass}
     {columns}
     {buttons}
-    queryOptions={[]}
+    {queryOptions}
     defaultButtons={false}
     allowDelete={false}
   >

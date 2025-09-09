@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import ReportContainer from '$lib/components/reports/ReportContainer.svelte';
-  import { queryCollectionDocs } from '$lib/utils/firestoreCrud';
+  import { queryCollectionDocs, type FilterCondition } from '$lib/utils/firestoreCrud';
   import { formatCurrency } from '$lib/utils/formatters';
   
   // Tax reporting parameters
@@ -67,8 +67,8 @@
     }
   }
   
-  async function getJournalEntriesInDateRange(start, end) {
-    const filters = [
+  async function getJournalEntriesInDateRange(start: Date, end: Date) {
+    const filters: FilterCondition[] = [
       { field: 'journalDate', operator: '>=', value: start },
       { field: 'journalDate', operator: '<=', value: end },
       { field: 'isPosted', operator: '==', value: true }
@@ -78,11 +78,11 @@
     
     // Fetch detailed lines for each entry
     const entriesWithLines = await Promise.all(
-      entries.map(async entry => {
-        const lines = await queryCollectionDocs(`transactions/accounting/journalEntries/${entry.id}/lines`);
+      entries.map(async (entry: any) => {
+        const lines = entry.lines || [];
         return {
           ...entry,
-          lines: lines.sort((a, b) => a.lineNo - b.lineNo)
+          lines: lines.sort((a: any, b: any) => a.lineNo - b.lineNo)
         };
       })
     );
@@ -90,21 +90,26 @@
     return entriesWithLines;
   }
   
-  function extractTaxEntries(journalEntries) {
-    const outputVat = [];
-    const inputVat = [];
-    const withholdingTax = [];
+  function extractTaxEntries(journalEntries: any[]) {
+    const outputVat: any[] = [];
+    const inputVat: any[] = [];
+    const withholdingTax: any[] = [];
     
     // Process each journal entry
-    journalEntries.forEach(entry => {
+    journalEntries.forEach((entry: any) => {
       const entryDate = new Date(entry.journalDate.seconds * 1000);
       
       // Process each line in the entry
-      entry.lines.forEach(line => {
-        // Check for tax accounts by name pattern or specific account IDs
-        // This logic will need to be adjusted based on your chart of accounts
-        if (line.accountName.toLowerCase().includes('output vat') || 
-            line.accountName.toLowerCase().includes('vat payable')) {
+      entry.lines.forEach((line: any) => {
+        const accountName = line.accountName.toLowerCase();
+        
+        // Check for output VAT accounts
+        if (accountName.includes('output vat') || 
+            accountName.includes('vat payable') ||
+            accountName.includes('vat output') ||
+            accountName.includes('sales tax payable') ||
+            accountName.includes('gst payable') ||
+            accountName.includes('hst payable')) {
           outputVat.push({
             date: entryDate,
             description: entry.description,
@@ -115,8 +120,13 @@
             sourceId: entry.sourceId
           });
         }
-        else if (line.accountName.toLowerCase().includes('input vat') || 
-                 line.accountName.toLowerCase().includes('vat receivable')) {
+        // Check for input VAT accounts
+        else if (accountName.includes('input vat') || 
+                 accountName.includes('vat receivable') ||
+                 accountName.includes('vat input') ||
+                 accountName.includes('purchase tax') ||
+                 accountName.includes('gst receivable') ||
+                 accountName.includes('hst receivable')) {
           inputVat.push({
             date: entryDate,
             description: entry.description,
@@ -127,7 +137,12 @@
             sourceId: entry.sourceId
           });
         }
-        else if (line.accountName.toLowerCase().includes('withholding tax')) {
+        // Check for withholding tax accounts
+        else if (accountName.includes('withholding tax') ||
+                 accountName.includes('wht') ||
+                 accountName.includes('withholding') ||
+                 accountName.includes('tax withheld') ||
+                 accountName.includes('payroll tax')) {
           withholdingTax.push({
             date: entryDate,
             description: entry.description,
@@ -144,11 +159,11 @@
     return { outputVat, inputVat, withholdingTax };
   }
   
-  function calculateMonthlySummaries(outputVat, inputVat, withholdingTax) {
-    const summaries = {};
+  function calculateMonthlySummaries(outputVat: any[], inputVat: any[], withholdingTax: any[]) {
+    const summaries: any = {};
     
     // Helper function to add an entry to the monthly summary
-    function addToMonthSummary(entry, taxType) {
+    function addToMonthSummary(entry: any, taxType: string) {
       const yearMonth = `${entry.date.getFullYear()}-${String(entry.date.getMonth() + 1).padStart(2, '0')}`;
       
       if (!summaries[yearMonth]) {
@@ -163,32 +178,37 @@
         };
       }
       
-      if (taxType === TAX_CATEGORIES.OUTPUT_VAT) {
-        summaries[yearMonth].outputVat += entry.isDebit ? -entry.amount : entry.amount;
-      } else if (taxType === TAX_CATEGORIES.INPUT_VAT) {
-        summaries[yearMonth].inputVat += entry.isDebit ? entry.amount : -entry.amount;
-      } else if (taxType === TAX_CATEGORIES.WITHHOLDING_TAX) {
-        summaries[yearMonth].withholdingTax += entry.isDebit ? -entry.amount : entry.amount;
+      // Add amounts based on tax type
+      if (taxType === 'output-vat') {
+        summaries[yearMonth].outputVat += entry.amount;
+      } else if (taxType === 'input-vat') {
+        summaries[yearMonth].inputVat += entry.amount;
+      } else if (taxType === 'withholding-tax') {
+        summaries[yearMonth].withholdingTax += entry.amount;
       }
       
-      // Calculate net VAT payable
+      // Calculate net VAT payable for this month
       summaries[yearMonth].netVatPayable = summaries[yearMonth].outputVat - summaries[yearMonth].inputVat;
     }
     
-    // Process all tax entries
-    outputVat.forEach(entry => addToMonthSummary(entry, TAX_CATEGORIES.OUTPUT_VAT));
-    inputVat.forEach(entry => addToMonthSummary(entry, TAX_CATEGORIES.INPUT_VAT));
-    withholdingTax.forEach(entry => addToMonthSummary(entry, TAX_CATEGORIES.WITHHOLDING_TAX));
+    // Process output VAT entries
+    outputVat.forEach((entry: any) => addToMonthSummary(entry, 'output-vat'));
     
-    // Convert to array and sort by year and month
-    return Object.values(summaries).sort((a, b) => {
+    // Process input VAT entries
+    inputVat.forEach((entry: any) => addToMonthSummary(entry, 'input-vat'));
+    
+    // Process withholding tax entries
+    withholdingTax.forEach((entry: any) => addToMonthSummary(entry, 'withholding-tax'));
+    
+    // Convert to array and sort by date
+    return Object.values(summaries).sort((a: any, b: any) => {
       if (a.year !== b.year) return a.year - b.year;
       return a.month - b.month;
     });
   }
   
-  function sumAmounts(entries) {
-    return entries.reduce((sum, entry) => {
+  function sumAmounts(entries: any[]) {
+    return entries.reduce((sum: number, entry: any) => {
       return sum + (entry.isDebit ? -entry.amount : entry.amount);
     }, 0);
   }
@@ -204,7 +224,7 @@
     csvContent += "MONTHLY SUMMARY\n";
     csvContent += "Month,Output VAT,Input VAT,Net VAT Payable,Withholding Tax\n";
     
-    reportData.monthlySummaries.forEach(month => {
+    reportData.monthlySummaries.forEach((month: any) => {
       csvContent += `${month.monthName} ${month.year},${month.outputVat},${month.inputVat},${month.netVatPayable},${month.withholdingTax}\n`;
     });
     csvContent += `TOTAL,${reportData.totalOutputVat},${reportData.totalInputVat},${reportData.netVatPayable},${reportData.totalWithholdingTax}\n\n`;
@@ -212,7 +232,7 @@
     // Output VAT Detail
     csvContent += "OUTPUT VAT DETAIL\n";
     csvContent += "Date,Reference,Description,Amount\n";
-    reportData.outputVat.forEach(entry => {
+    reportData.outputVat.forEach((entry: any) => {
       csvContent += `${entry.date.toLocaleDateString()},${entry.reference},"${entry.description}",${entry.isDebit ? -entry.amount : entry.amount}\n`;
     });
     csvContent += `TOTAL,,,"${reportData.totalOutputVat}"\n\n`;
@@ -220,7 +240,7 @@
     // Input VAT Detail
     csvContent += "INPUT VAT DETAIL\n";
     csvContent += "Date,Reference,Description,Amount\n";
-    reportData.inputVat.forEach(entry => {
+    reportData.inputVat.forEach((entry: any) => {
       csvContent += `${entry.date.toLocaleDateString()},${entry.reference},"${entry.description}",${entry.isDebit ? entry.amount : -entry.amount}\n`;
     });
     csvContent += `TOTAL,,,"${reportData.totalInputVat}"\n\n`;
@@ -228,7 +248,7 @@
     // Withholding Tax Detail
     csvContent += "WITHHOLDING TAX DETAIL\n";
     csvContent += "Date,Reference,Description,Amount\n";
-    reportData.withholdingTax.forEach(entry => {
+    reportData.withholdingTax.forEach((entry: any) => {
       csvContent += `${entry.date.toLocaleDateString()},${entry.reference},"${entry.description}",${entry.isDebit ? -entry.amount : entry.amount}\n`;
     });
     csvContent += `TOTAL,,,"${reportData.totalWithholdingTax}"\n`;

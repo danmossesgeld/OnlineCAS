@@ -1,490 +1,488 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { queryCollectionDocs, type FilterCondition } from '$lib/utils/firestoreCrud';
-  import { goto } from '$app/navigation';
-  import { createFirestoreOptionsStore, type FirestoreOption } from '$lib/utils/firestoreOptions';
-  
-  // Data stores for filtering options
-  let accountOptions: FirestoreOption[] = [];
-  let sourceTypeOptions = [
-    { label: 'All Source Types', value: '' },
-    { label: 'Sales Invoice', value: 'salesInvoice' },
-    { label: 'Credit Memo', value: 'creditMemo' },
-    { label: 'Payment Receipt', value: 'receipt' },
-    { label: 'APV', value: 'apv' },
-    { label: 'Vendor Payment', value: 'payment' },
-    { label: 'Receiving Report', value: 'receivingReport' },
-    { label: 'Inventory Adjustment', value: 'inventoryAdjustment' },
-    { label: 'General Journal', value: 'general' }
-  ];
-  
-  // Filter state
-  let filters = {
-    startDate: '',
-    endDate: '',
-    accountId: '',
-    sourceType: '',
-    searchText: ''
-  };
+  import { formatCurrency, formatDate } from '$lib/utils/formatters';
+  import FormLayout from '$lib/components/FormLayout.svelte';
+  import FormSection from '$lib/components/FormSection.svelte';
 
-  // Load account options from Firestore
-  createFirestoreOptionsStore('masterlist/accounts', 'name', 'id').subscribe(opts => {
-    accountOptions = [{ label: 'All Accounts', value: '' }, ...opts];
-  });
-
-  // Define type for Firestore timestamp
-  type FirestoreTimestamp = {
-    toDate: () => Date;
-    seconds: number;
-    nanoseconds: number;
-  };
-
-  // Define types for journal entries
-  type JournalEntry = {
+  interface JournalEntry {
     id: string;
-    journalDate: Date | FirestoreTimestamp;
+    journalDate: Date;
     referenceNo: string;
     description: string;
     sourceType: string;
     sourceId: string;
-    totalDebit: number;
-    totalCredit: number;
     isPosted: boolean;
     status: string;
-    lines: Array<{
-      lineNo: number;
-      accountId: string;
-      accountName: string;
-      nameType?: string;
-      nameId?: string;
-      nameName?: string;
-      lineDescription: string;
-      debit: number;
-      credit: number;
-    }>;
-    createdAt: Date | FirestoreTimestamp;
-  };
+    lines: JournalLine[];
+    totalDebit: number;
+    totalCredit: number;
+    isBalanced: boolean;
+    balanceDifference: number;
+  }
 
-  // Store for journal entries
+  interface JournalLine {
+    lineNo: number;
+    accountId: string;
+    accountName: string;
+    nameType?: string;
+    nameId?: string;
+    nameName?: string;
+    lineDescription: string;
+    debit: number;
+    credit: number;
+  }
+
   let journalEntries: JournalEntry[] = [];
+  let filteredEntries: JournalEntry[] = [];
   let isLoading = true;
-  let expandedEntryId: string | null = null;
-  
-  // Type definitions for document mapping
-  type SourceTypeMap = Record<string, string>;
+  let error: string | null = null;
 
-  // Initialize with dates for the current month
-  onMount(() => {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    
-    filters.startDate = firstDay.toISOString().split('T')[0];
-    filters.endDate = lastDay.toISOString().split('T')[0];
-    
-    loadAuditTrail();
+  // Filter states
+  let dateFrom = '';
+  let dateTo = '';
+  let accountFilter = '';
+  let sourceTypeFilter = '';
+  let statusFilter = '';
+  let balanceFilter = 'all'; // 'all', 'balanced', 'unbalanced'
+  let searchTerm = '';
+
+  // Sort states
+  let sortField = 'journalDate';
+  let sortDirection = 'desc';
+
+  // Pagination
+  let currentPage = 1;
+  let itemsPerPage = 20;
+  let totalPages = 1;
+
+  // Summary stats
+  let totalEntries = 0;
+  let balancedEntries = 0;
+  let unbalancedEntries = 0;
+  let totalDebits = 0;
+  let totalCredits = 0;
+
+  // Modal state
+  let selectedEntry: JournalEntry | null = null;
+
+  onMount(async () => {
+    await loadJournalEntries();
   });
 
-  // Load journal entries based on filters
-  async function loadAuditTrail() {
+  async function loadJournalEntries() {
     isLoading = true;
+    error = null;
     
     try {
-      // Build filter conditions
-      const filterConditions: FilterCondition[] = [];
+      const entries = await queryCollectionDocs('accounting/journalEntries');
       
-      // Date range filter
-      if (filters.startDate) {
-        filterConditions.push({
-          field: 'journalDate',
-          operator: '>=',
-          value: new Date(filters.startDate)
-        });
-      }
-      
-      if (filters.endDate) {
-        filterConditions.push({
-          field: 'journalDate',
-          operator: '<=',
-          value: new Date(filters.endDate + 'T23:59:59')
-        });
-      }
-      
-      // Source type filter
-      if (filters.sourceType) {
-        filterConditions.push({
-          field: 'sourceType',
-          operator: '==',
-          value: filters.sourceType
-        });
-      }
-      
-      // Query journal entries and properly cast the return type
-      const rawEntries = await queryCollectionDocs('transactions/accounting/journalEntries', filterConditions);
-      
-      // Convert raw entries to proper JournalEntry type
-      let entries = rawEntries.map(entry => {
-        return entry as unknown as JournalEntry;
+      journalEntries = entries.map((entry: any) => {
+        const totalDebit = entry.lines?.reduce((sum: number, line: any) => sum + (line.debit || 0), 0) || 0;
+        const totalCredit = entry.lines?.reduce((sum: number, line: any) => sum + (line.credit || 0), 0) || 0;
+        const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+        
+        return {
+          ...entry,
+          journalDate: entry.journalDate?.seconds ? new Date(entry.journalDate.seconds * 1000) : new Date(),
+          totalDebit,
+          totalCredit,
+          isBalanced,
+          balanceDifference: totalDebit - totalCredit
+        };
       });
-      
-      // Post-filtering for account ID (since we need to check line items)
-      if (filters.accountId) {
-        entries = entries.filter(entry => 
-          entry.lines && entry.lines.some(line => line.accountId === filters.accountId)
-        );
-      }
-      
-      // Text search (case-insensitive)
-      if (filters.searchText) {
-        const searchLower = filters.searchText.toLowerCase();
-        entries = entries.filter(entry => 
-          entry.description?.toLowerCase().includes(searchLower) ||
-          entry.referenceNo?.toLowerCase().includes(searchLower) ||
-          entry.lines?.some(line => 
-            line.accountName?.toLowerCase().includes(searchLower) ||
-            line.lineDescription?.toLowerCase().includes(searchLower) ||
-            line.nameName?.toLowerCase().includes(searchLower)
-          )
-        );
-      }
-      
-      // Sort by date (newest first)
-      entries.sort((a, b) => {
-        const dateA = a.journalDate instanceof Date ? a.journalDate : 
-                    ('toDate' in a.journalDate && typeof a.journalDate.toDate === 'function' ? 
-                    a.journalDate.toDate() : new Date(a.journalDate as any));
-        const dateB = b.journalDate instanceof Date ? b.journalDate : 
-                    ('toDate' in b.journalDate && typeof b.journalDate.toDate === 'function' ? 
-                    b.journalDate.toDate() : new Date(b.journalDate as any));
-        return dateB.getTime() - dateA.getTime();
-      });
-      
-      journalEntries = entries;
-    } catch (error) {
-      console.error('Error loading audit trail:', error);
-      alert('Failed to load audit trail. Please try again.');
+
+      calculateStats();
+      applyFilters();
+    } catch (err) {
+      console.error('Failed to load journal entries:', err);
+      error = (err as Error).message;
     } finally {
       isLoading = false;
     }
   }
 
-  // Format date for display
-  function formatDate(date: any): string {
-    if (!date) return '';
-    
-    const d = date instanceof Date ? date : 
-              'toDate' in date && typeof date.toDate === 'function' ? date.toDate() : 
-              new Date(date);
-    
-    return d.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+  function calculateStats() {
+    totalEntries = journalEntries.length;
+    balancedEntries = journalEntries.filter(entry => entry.isBalanced).length;
+    unbalancedEntries = totalEntries - balancedEntries;
+    totalDebits = journalEntries.reduce((sum, entry) => sum + entry.totalDebit, 0);
+    totalCredits = journalEntries.reduce((sum, entry) => sum + entry.totalCredit, 0);
+  }
+
+  function applyFilters() {
+    let filtered = [...journalEntries];
+
+    // Date filter
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      filtered = filtered.filter(entry => entry.journalDate >= fromDate);
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(entry => entry.journalDate <= toDate);
+    }
+
+    // Account filter
+    if (accountFilter) {
+      filtered = filtered.filter(entry => 
+        entry.lines.some(line => 
+          line.accountName.toLowerCase().includes(accountFilter.toLowerCase())
+        )
+      );
+    }
+
+    // Source type filter
+    if (sourceTypeFilter) {
+      filtered = filtered.filter(entry => 
+        entry.sourceType.toLowerCase().includes(sourceTypeFilter.toLowerCase())
+      );
+    }
+
+    // Status filter
+    if (statusFilter) {
+      filtered = filtered.filter(entry => entry.status === statusFilter);
+    }
+
+    // Balance filter
+    if (balanceFilter === 'balanced') {
+      filtered = filtered.filter(entry => entry.isBalanced);
+    } else if (balanceFilter === 'unbalanced') {
+      filtered = filtered.filter(entry => !entry.isBalanced);
+    }
+
+    // Search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(entry => 
+        entry.referenceNo.toLowerCase().includes(term) ||
+        entry.description.toLowerCase().includes(term) ||
+        entry.lines.some(line => 
+          line.accountName.toLowerCase().includes(term) ||
+          line.lineDescription.toLowerCase().includes(term)
+        )
+      );
+    }
+
+    // Sort
+    filtered.sort((a, b) => {
+      let aValue: any = a[sortField as keyof JournalEntry];
+      let bValue: any = b[sortField as keyof JournalEntry];
+      
+      if (sortField === 'journalDate') {
+        aValue = aValue.getTime();
+        bValue = bValue.getTime();
+      }
+      
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
     });
+
+    filteredEntries = filtered;
+    currentPage = 1;
+    totalPages = Math.ceil(filteredEntries.length / itemsPerPage);
   }
 
-  // Format currency values
-  function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'PHP'
-    }).format(amount || 0);
+  function getPaginatedEntries() {
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    return filteredEntries.slice(start, end);
   }
 
-  // Toggle expanded entry view
-  function toggleExpand(entryId: string) {
-    expandedEntryId = expandedEntryId === entryId ? null : entryId;
-  }
-
-  // View source document
-  function viewSourceDocument(entry: JournalEntry) {
-    if (!entry.sourceType || !entry.sourceId) return;
-    
-    const routeMap: Record<string, string> = {
-      'salesInvoice': `/customerCenter/salesInvoice/form?id=${entry.sourceId}&mode=view`,
-      'creditMemo': `/customerCenter/creditMemo/form?id=${entry.sourceId}&mode=view`,
-      'receipt': `/customerCenter/receivePayment/form?id=${entry.sourceId}&mode=view`,
-      'apv': `/vendorCenter/apv/form?id=${entry.sourceId}&mode=view`,
-      'payment': `/vendorCenter/payment/form?id=${entry.sourceId}&mode=view`,
-      'receivingReport': `/vendorCenter/receiving/form?id=${entry.sourceId}&mode=view`,
-      'inventoryAdjustment': `/inventory/adjustment/form?id=${entry.sourceId}&mode=view`,
-      'general': `/accounting/generalJournal/form?id=${entry.sourceId}&mode=view`
-    };
-    
-    const route = routeMap[entry.sourceType];
-    if (route) {
-      goto(route);
+  function changePage(page: number) {
+    if (page >= 1 && page <= totalPages) {
+      currentPage = page;
     }
   }
 
-  // Apply filters
-  function applyFilters() {
-    loadAuditTrail();
+  function changeSort(field: string) {
+    if (sortField === field) {
+      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortField = field;
+      sortDirection = 'asc';
+    }
+    applyFilters();
   }
 
-  // Reset filters
-  function resetFilters() {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    
-    filters = {
-      startDate: firstDay.toISOString().split('T')[0],
-      endDate: lastDay.toISOString().split('T')[0],
-      accountId: '',
-      sourceType: '',
-      searchText: ''
-    };
-    
-    loadAuditTrail();
+  function clearFilters() {
+    dateFrom = '';
+    dateTo = '';
+    accountFilter = '';
+    sourceTypeFilter = '';
+    statusFilter = '';
+    balanceFilter = 'all';
+    searchTerm = '';
+    applyFilters();
   }
 
-  // Get source type display name
-  function getSourceTypeDisplay(sourceType: string): string {
-    const sourceTypeMap: SourceTypeMap = {
-      'salesInvoice': 'Sales Invoice',
-      'creditMemo': 'Credit Memo',
-      'receipt': 'Payment Receipt',
-      'apv': 'APV',
-      'payment': 'Vendor Payment',
-      'receivingReport': 'Receiving Report',
-      'inventoryAdjustment': 'Inventory Adjustment',
-      'general': 'General Journal'
-    };
-    
-    return sourceTypeMap[sourceType] || sourceType;
+  function exportToCSV() {
+    const headers = [
+      'Date',
+      'Reference',
+      'Description',
+      'Source Type',
+      'Status',
+      'Total Debit',
+      'Total Credit',
+      'Balance Status',
+      'Balance Difference'
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...filteredEntries.map(entry => [
+        formatDate(entry.journalDate),
+        entry.referenceNo,
+        `"${entry.description}"`,
+        entry.sourceType,
+        entry.status,
+        entry.totalDebit,
+        entry.totalCredit,
+        entry.isBalanced ? 'Balanced' : 'Unbalanced',
+        entry.balanceDifference
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `transaction_journal_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
-  // Get status badge class
-  function getStatusBadgeClass(status: string): string {
-    const statusMap: Record<string, string> = {
-      'draft': 'bg-gray-200 text-gray-800',
-      'posted': 'bg-green-100 text-green-800',
-      'void': 'bg-red-100 text-red-800',
-      'deleted': 'bg-red-100 text-red-800'
-    };
-    
-    return statusMap[status] || 'bg-gray-200 text-gray-800';
+  function showEntryDetails(entry: JournalEntry) {
+    selectedEntry = entry;
+  }
+
+  // Reactive statements
+  $: if (journalEntries.length > 0) {
+    applyFilters();
   }
 </script>
 
-<div class="container mx-auto px-4 py-6">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold">Audit Trail</h1>
+<svelte:head>
+  <title>Transaction Journal - Digisoft CAS</title>
+</svelte:head>
+
+<FormLayout title="Transaction Journal">
+  <div class="mb-4">
+    <h2 class="text-lg font-semibold text-gray-800 mb-2">Comprehensive Journal Entry Analysis</h2>
+    <p class="text-gray-600">View, filter, and analyze all journal entries with detailed balance validation</p>
   </div>
-  
-  <!-- Filters -->
-  <div class="bg-white shadow rounded-lg p-4 mb-6">
-    <h2 class="text-lg font-semibold mb-4">Filters</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div>
-        <label for="start-date" class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
-        <div class="flex space-x-2">
-          <input 
-            id="start-date"
-            type="date" 
-            bind:value={filters.startDate} 
-            class="form-input rounded-md shadow-sm w-full"
-          />
-          <span class="self-center">to</span>
-          <input 
-            id="end-date"
-            type="date" 
-            bind:value={filters.endDate} 
-            class="form-input rounded-md shadow-sm w-full"
-          />
-        </div>
+
+  <!-- Summary Statistics -->
+  <FormSection title="Summary Statistics">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-blue-50 p-4 rounded-lg">
+        <div class="text-2xl font-bold text-blue-600">{totalEntries}</div>
+        <div class="text-sm text-blue-800">Total Entries</div>
       </div>
-      
-      <div>
-        <label for="account-filter" class="block text-sm font-medium text-gray-700 mb-1">Account</label>
-        <select 
-          id="account-filter"
-          bind:value={filters.accountId} 
-          class="form-select rounded-md shadow-sm w-full"
-        >
-          {#each accountOptions as option}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </select>
+      <div class="bg-green-50 p-4 rounded-lg">
+        <div class="text-2xl font-bold text-green-600">{balancedEntries}</div>
+        <div class="text-sm text-green-800">Balanced</div>
       </div>
-      
-      <div>
-        <label for="source-type-filter" class="block text-sm font-medium text-gray-700 mb-1">Source Type</label>
-        <select 
-          id="source-type-filter"
-          bind:value={filters.sourceType} 
-          class="form-select rounded-md shadow-sm w-full"
-        >
-          {#each sourceTypeOptions as option}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </select>
+      <div class="bg-red-50 p-4 rounded-lg">
+        <div class="text-2xl font-bold text-red-600">{unbalancedEntries}</div>
+        <div class="text-sm text-red-800">Unbalanced</div>
       </div>
-      
-      <div>
-        <label for="search-filter" class="block text-sm font-medium text-gray-700 mb-1">Search</label>
-        <input 
-          id="search-filter"
-          type="text" 
-          bind:value={filters.searchText} 
-          placeholder="Search by description, account, or reference..." 
-          class="form-input rounded-md shadow-sm w-full"
-        />
-      </div>
-      
-      <div class="flex items-end space-x-2">
-        <button 
-          on:click={applyFilters} 
-          class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md"
-        >
-          Apply Filters
-        </button>
-        <button 
-          on:click={resetFilters} 
-          class="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-md"
-        >
-          Reset
-        </button>
+      <div class="bg-purple-50 p-4 rounded-lg">
+        <div class="text-2xl font-bold text-purple-600">{formatCurrency(totalDebits)}</div>
+        <div class="text-sm text-purple-800">Total Debits</div>
       </div>
     </div>
-  </div>
-  
-  <!-- Audit Trail Entries -->
-  <div class="bg-white shadow rounded-lg overflow-hidden">
-    {#if isLoading}
-      <div class="p-8 text-center">
-        <p class="text-gray-600">Loading audit trail entries...</p>
+  </FormSection>
+
+  <!-- Filters -->
+  <FormSection title="Filters">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+        <input
+          type="date"
+          bind:value={dateFrom}
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
       </div>
-    {:else if journalEntries.length === 0}
-      <div class="p-8 text-center">
-        <p class="text-gray-600">No audit trail entries found for the selected filters.</p>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+        <input
+          type="date"
+          bind:value={dateTo}
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Account</label>
+        <input
+          type="text"
+          bind:value={accountFilter}
+          placeholder="Filter by account name"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Source Type</label>
+        <input
+          type="text"
+          bind:value={sourceTypeFilter}
+          placeholder="Filter by source type"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+        <select
+          bind:value={statusFilter}
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Statuses</option>
+          <option value="posted">Posted</option>
+          <option value="draft">Draft</option>
+          <option value="void">Void</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Balance Status</label>
+        <select
+          bind:value={balanceFilter}
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="all">All Entries</option>
+          <option value="balanced">Balanced Only</option>
+          <option value="unbalanced">Unbalanced Only</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+      <input
+        type="text"
+        bind:value={searchTerm}
+        placeholder="Search by reference, description, or account"
+        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+    </div>
+
+    <div class="flex space-x-4">
+      <button
+        on:click={applyFilters}
+        class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+      >
+        Apply Filters
+      </button>
+      <button
+        on:click={clearFilters}
+        class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+      >
+        Clear Filters
+      </button>
+      <button
+        on:click={exportToCSV}
+        class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+      >
+        Export CSV
+      </button>
+    </div>
+  </FormSection>
+
+  <!-- Journal Entries Table -->
+  <FormSection title="Journal Entries">
+    {#if isLoading}
+      <div class="text-center py-8">
+        <div class="text-gray-600">Loading journal entries...</div>
+      </div>
+    {:else if error}
+      <div class="text-center py-8">
+        <div class="text-red-600">Error: {error}</div>
+      </div>
+    {:else if filteredEntries.length === 0}
+      <div class="text-center py-8">
+        <div class="text-gray-600">No journal entries found matching the current filters.</div>
       </div>
     {:else}
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source Type</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th 
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                on:click={() => changeSort('journalDate')}
+              >
+                Date {sortField === 'journalDate' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+              </th>
+              <th 
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                on:click={() => changeSort('referenceNo')}
+              >
+                Reference {sortField === 'referenceNo' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Debits</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Credits</th>
+              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Balance</th>
+              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
-            {#each journalEntries as entry (entry.id)}
+            {#each getPaginatedEntries() as entry}
               <tr class="hover:bg-gray-50">
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td class="px-4 py-3 text-sm text-gray-900">
                   {formatDate(entry.journalDate)}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td class="px-4 py-3 text-sm text-gray-900 font-medium">
                   {entry.referenceNo}
                 </td>
-                <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                <td class="px-4 py-3 text-sm text-gray-900">
                   {entry.description}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {getSourceTypeDisplay(entry.sourceType)}
+                <td class="px-4 py-3 text-sm text-gray-900">
+                  {entry.sourceType}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatCurrency(entry.totalDebit)}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {getStatusBadgeClass(entry.status)}">
+                <td class="px-4 py-3 text-sm text-center">
+                  <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
                     {entry.status}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div class="flex space-x-2">
-                    <button 
-                      on:click={() => toggleExpand(entry.id)} 
-                      class="text-blue-600 hover:text-blue-800"
-                    >
-                      {expandedEntryId === entry.id ? 'Hide Details' : 'View Details'}
-                    </button>
-                    {#if entry.sourceType && entry.sourceId}
-                      <button 
-                        on:click={() => viewSourceDocument(entry)} 
-                        class="text-green-600 hover:text-green-800"
-                      >
-                        View Source
-                      </button>
-                    {/if}
-                  </div>
+                <td class="px-4 py-3 text-sm text-gray-900 text-right">
+                  {formatCurrency(entry.totalDebit)}
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900 text-right">
+                  {formatCurrency(entry.totalCredit)}
+                </td>
+                <td class="px-4 py-3 text-sm text-center">
+                  {#if entry.isBalanced}
+                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                      ✅ Balanced
+                    </span>
+                  {:else}
+                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                      ❌ Unbalanced
+                    </span>
+                  {/if}
+                </td>
+                <td class="px-4 py-3 text-sm text-center">
+                  <button
+                    class="text-indigo-600 hover:text-indigo-900 text-xs"
+                    on:click={() => showEntryDetails(entry)}
+                  >
+                    View Details
+                  </button>
                 </td>
               </tr>
-              
-              <!-- Expanded Details -->
-              {#if expandedEntryId === entry.id}
-                <tr>
-                  <td colspan="7" class="px-6 py-4 bg-gray-50">
-                    <div class="text-sm">
-                      <h3 class="font-medium text-gray-900 mb-2">Journal Entry Details</h3>
-                      
-                      <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-md">
-                          <thead class="bg-gray-100">
-                            <tr>
-                              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
-                              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Entity</th>
-                              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                              <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Debit</th>
-                              <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Credit</th>
-                            </tr>
-                          </thead>
-                          <tbody class="divide-y divide-gray-200">
-                            {#each entry.lines || [] as line}
-                              <tr>
-                                <td class="px-4 py-2 text-sm text-gray-900">{line.accountName}</td>
-                                <td class="px-4 py-2 text-sm text-gray-900">
-                                  {#if line.nameType && line.nameName}
-                                    <span class="text-xs text-gray-500">{line.nameType}:</span> {line.nameName}
-                                  {:else}
-                                    -
-                                  {/if}
-                                </td>
-                                <td class="px-4 py-2 text-sm text-gray-900">{line.lineDescription}</td>
-                                <td class="px-4 py-2 text-sm text-gray-900 text-right">
-                                  {line.debit ? formatCurrency(line.debit) : '-'}
-                                </td>
-                                <td class="px-4 py-2 text-sm text-gray-900 text-right">
-                                  {line.credit ? formatCurrency(line.credit) : '-'}
-                                </td>
-                              </tr>
-                            {/each}
-                            
-                            <!-- Totals -->
-                            <tr class="bg-gray-50 font-medium">
-                              <td colspan="3" class="px-4 py-2 text-sm text-right">Totals</td>
-                              <td class="px-4 py-2 text-sm text-right">
-                                {formatCurrency(entry.totalDebit || 0)}
-                              </td>
-                              <td class="px-4 py-2 text-sm text-right">
-                                {formatCurrency(entry.totalCredit || 0)}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                      
-                      <!-- Additional metadata -->
-                      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p class="text-xs text-gray-500">
-                            Created: {formatDate(entry.createdAt)}
-                          </p>
-                        </div>
-                        
-                        <div>
-                          <p class="text-xs text-gray-500">
-                            Entry ID: {entry.id}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+              {#if !entry.isBalanced}
+                <tr class="bg-red-50">
+                  <td colspan="9" class="px-4 py-2 text-xs text-red-700">
+                    <strong>Balance Difference:</strong> {formatCurrency(entry.balanceDifference)}
                   </td>
                 </tr>
               {/if}
@@ -492,6 +490,100 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Pagination -->
+      {#if totalPages > 1}
+        <div class="flex items-center justify-between mt-4">
+          <div class="text-sm text-gray-700">
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredEntries.length)} of {filteredEntries.length} entries
+          </div>
+          <div class="flex space-x-2">
+            <button
+              on:click={() => changePage(currentPage - 1)}
+              disabled={currentPage === 1}
+              class="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            {#each Array.from({length: Math.min(5, totalPages)}, (_, i) => {
+              const page = i + 1;
+              return page;
+            }) as page}
+              <button
+                on:click={() => changePage(page)}
+                class="px-3 py-1 text-sm border border-gray-300 rounded-md {currentPage === page ? 'bg-indigo-600 text-white' : ''}"
+              >
+                {page}
+              </button>
+            {/each}
+            <button
+              on:click={() => changePage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              class="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      {/if}
     {/if}
+  </FormSection>
+</FormLayout>
+
+<!-- Entry Details Modal -->
+{#if selectedEntry}
+  <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+      <div class="mt-3">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Journal Entry Details</h3>
+        <div class="mb-4">
+          <div class="grid grid-cols-2 gap-4 text-sm">
+            <div><strong>Reference:</strong> {selectedEntry.referenceNo}</div>
+            <div><strong>Date:</strong> {formatDate(selectedEntry.journalDate)}</div>
+            <div><strong>Description:</strong> {selectedEntry.description}</div>
+            <div><strong>Source Type:</strong> {selectedEntry.sourceType}</div>
+            <div><strong>Status:</strong> {selectedEntry.status}</div>
+            <div><strong>Posted:</strong> {selectedEntry.isPosted ? 'Yes' : 'No'}</div>
+          </div>
+        </div>
+        
+        <div class="mb-4">
+          <h4 class="font-medium text-gray-900 mb-2">Journal Lines</h4>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Line</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Debit</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Credit</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                {#each selectedEntry.lines as line}
+                  <tr>
+                    <td class="px-3 py-2 text-sm text-gray-900">{line.lineNo}</td>
+                    <td class="px-3 py-2 text-sm text-gray-900">{line.accountName}</td>
+                    <td class="px-3 py-2 text-sm text-gray-900">{line.lineDescription}</td>
+                    <td class="px-3 py-2 text-sm text-gray-900 text-right">{formatCurrency(line.debit)}</td>
+                    <td class="px-3 py-2 text-sm text-gray-900 text-right">{formatCurrency(line.credit)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div class="flex justify-end space-x-3">
+          <button
+            on:click={() => selectedEntry = null}
+            class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
+{/if}

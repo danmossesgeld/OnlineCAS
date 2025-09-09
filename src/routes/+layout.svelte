@@ -20,7 +20,7 @@
 			user.set(u);
 			const path = window.location.pathname;
 			if (!u && path !== '/') goto('/');
-			if (u && path === '/') goto('/main');
+			if (u && path === '/') goto('/main/dashboard');
 		});
 	});
 </script>

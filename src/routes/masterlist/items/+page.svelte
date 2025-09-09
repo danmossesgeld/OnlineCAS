@@ -4,6 +4,8 @@
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
   import { categoryOptions, unitOptions } from '$lib/utils/optionStores';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
+  import { parseCSVToRecords } from '$lib/utils/csvParser';
+  import { exportNestedFirestoreCollectionToCSV, type ExportColumn } from '$lib/utils/csvExporter';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   let loaded = false;
@@ -62,8 +64,8 @@
   const columns = [
     { label: 'Code', key: 'code' },
     { label: 'Name', key: 'name' },
-    { label: 'Category', key: 'category' },
-    { label: 'Unit', key: 'unit_id' },
+    { label: 'Category', key: 'category_name' },
+    { label: 'Unit', key: 'unit_name' },
     { label: 'Sales Price', key: 'sales_price', format: (value: number) => value ? `₱${value.toFixed(2)}` : '' },
     { label: 'Type', key: 'is_inventory', format: (value: boolean) => value ? 'Inventory' : 'Non-inventory' },
     { label: 'Status', key: 'is_active', format: (value: boolean) => value ? 'Active' : 'Inactive' }
@@ -102,7 +104,7 @@
   const documentType = 'item';
   const title = 'Item Masterlist';
   const subtitle = 'Manage your inventory and non-inventory items';
-  const primaryColorClass = 'blue';
+  const primaryColorClass = 'indigo';
   const totalLabel = 'Total Items';
   // Setting these to empty strings will hide the respective cards
   const postedLabel = '';
@@ -117,6 +119,99 @@
       color: 'primary',
       icon: 'material-symbols:add',
       onClick: handleAdd
+    },
+    {
+      label: 'Import CSV',
+      color: 'outline',
+      icon: 'material-symbols:upload',
+      onClick: () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.csv';
+        input.onchange = async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const text = await file.text();
+          const records = parseCSVToRecords(text);
+          
+          for (const rec of records) {
+            // Find the selected category and unit labels for proper display names
+            const selectedCategory = $categoryOptions.find(opt => opt.value === rec.category);
+            const selectedUnit = $unitOptions.find(opt => opt.value === (rec.unit_id || rec.unit));
+
+            const payload: any = {
+              code: rec.code || '',
+              name: rec.name || '',
+              description: rec.description || '',
+              category: rec.category || '',
+              category_name: selectedCategory ? selectedCategory.label : '',
+              unit_id: rec.unit_id || rec.unit || '',
+              unit_name: selectedUnit ? selectedUnit.label : '',
+              is_inventory: String(rec.is_inventory).toLowerCase() === 'true',
+              is_sellable: String(rec.is_sellable).toLowerCase() !== 'false',
+              is_purchasable: String(rec.is_purchasable).toLowerCase() !== 'false',
+              sales_price: rec.sales_price ? parseFloat(rec.sales_price) : 0,
+              purchase_price: rec.purchase_price ? parseFloat(rec.purchase_price) : 0,
+              income_account_id: rec.income_account_id || '',
+              expense_account_id: rec.expense_account_id || '',
+              inventory_account_id: rec.inventory_account_id || '',
+              cogs_account_id: rec.cogs_account_id || '',
+              average_cost: rec.average_cost ? parseFloat(rec.average_cost) : 0,
+              is_active: String(rec.is_active).toLowerCase() !== 'false',
+              created_at: new Date(),
+              updated_at: new Date()
+            };
+            if (payload.code && payload.name) {
+              try { await addDocToCollection(collectionPath, payload); } catch {}
+            }
+          }
+          alert('Item import finished');
+        };
+        input.click();
+      }
+    },
+    {
+      label: 'Sample CSV',
+      color: 'outline',
+      icon: 'material-symbols:description',
+      onClick: () => {
+        const sample = 'code,name,description,category,unit_id,is_inventory,is_sellable,is_purchasable,sales_price,purchase_price,income_account_id,expense_account_id,inventory_account_id,cogs_account_id,is_active\nITM-001,A4 Bond Paper,Premium white bond paper 500 sheets,Office Supplies,ream,true,true,true,250.00,180.00,4010,5010,1020,5100,true\nITM-002,Ballpoint Pen Blue,Blue ink ballpoint pen,Office Supplies,pc,true,true,true,15.00,8.00,4010,5010,1020,5100,true\nITM-003,Stapler Heavy Duty,Metal heavy duty stapler,Office Equipment,pc,true,true,true,450.00,320.00,4010,5010,1020,5100,true\nITM-004,Consulting Services,Professional consulting hourly rate,Services,hr,false,true,false,2500.00,0.00,4020,5020,,,true\nITM-005,Laptop Computer,Business laptop with warranty,Electronics,pc,true,true,true,45000.00,38000.00,4010,5010,1020,5100,true\nITM-006,Office Chair,Ergonomic office chair with wheels,Furniture,pc,true,true,true,8500.00,6200.00,4010,5010,1020,5100,true\nITM-007,Printer Ink Cartridge,Black ink cartridge for laser printer,Printer Supplies,pc,true,true,true,1200.00,850.00,4010,5010,1020,5100,true\nITM-008,Training Workshop,Half-day training workshop,Services,session,false,true,false,15000.00,0.00,4020,5020,,,true\nITM-009,USB Flash Drive,32GB USB 3.0 flash drive,Electronics,pc,true,true,true,650.00,420.00,4010,5010,1020,5100,false';
+        const blob = new Blob([sample], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'items_sample.csv'; a.click();
+        URL.revokeObjectURL(url);
+      }
+    },
+    {
+      label: 'Export CSV',
+      color: 'outline',
+      icon: 'material-symbols:download',
+      onClick: async () => {
+        const exportColumns: ExportColumn[] = [
+          { key: 'code', label: 'Code' },
+          { key: 'name', label: 'Name' },
+          { key: 'description', label: 'Description' },
+          { key: 'category', label: 'Category' },
+          { key: 'category_name', label: 'Category Name' },
+          { key: 'unit_id', label: 'Unit ID' },
+          { key: 'unit_name', label: 'Unit Name' },
+          { key: 'is_inventory', label: 'Inventory', format: (value: boolean) => value ? 'true' : 'false' },
+          { key: 'is_sellable', label: 'Sellable', format: (value: boolean) => value ? 'true' : 'false' },
+          { key: 'is_purchasable', label: 'Purchasable', format: (value: boolean) => value ? 'true' : 'false' },
+          { key: 'sales_price', label: 'Sales Price', format: (value: number) => value?.toString() || '0' },
+          { key: 'purchase_price', label: 'Purchase Price', format: (value: number) => value?.toString() || '0' },
+          { key: 'income_account_id', label: 'Income Account' },
+          { key: 'expense_account_id', label: 'Expense Account' },
+          { key: 'inventory_account_id', label: 'Inventory Account' },
+          { key: 'cogs_account_id', label: 'COGS Account' },
+          { key: 'average_cost', label: 'Average Cost', format: (value: number) => value?.toString() || '0' },
+          { key: 'is_active', label: 'Active', format: (value: boolean) => value ? 'true' : 'false' }
+        ];
+        
+        const filename = `items_export_${new Date().toISOString().split('T')[0]}.csv`;
+        await exportNestedFirestoreCollectionToCSV(rootCollection, parentCollection, subCollectionName, exportColumns, filename, 'code');
+      }
     }
   ];
 
@@ -150,12 +245,18 @@
       errorMsg = 'Code and Name are required.';
       return;
     }
+    // Find the selected category and unit labels
+    const selectedCategory = $categoryOptions.find(opt => opt.value === formData.category);
+    const selectedUnit = $unitOptions.find(opt => opt.value === formData.unit_id);
+
     const dataToSave = {
       code: formData.code.trim(),
       name: formData.name.trim(),
       description: formData.description?.trim() || '',
       category: formData.category || '',
+      category_name: selectedCategory ? selectedCategory.label : '',
       unit_id: formData.unit_id || '',
+      unit_name: selectedUnit ? selectedUnit.label : '',
       is_inventory: !!formData.is_inventory,
       is_sellable: formData.is_sellable === undefined ? true : !!formData.is_sellable,
       is_purchasable: formData.is_purchasable === undefined ? true : !!formData.is_purchasable,
@@ -168,6 +269,7 @@
       average_cost: formData.average_cost || 0,
       is_active: formData.is_active === undefined ? true : !!formData.is_active
     };
+
     try {
       if (editingItem) {
         // Use the collectionPath approach with the updated utils

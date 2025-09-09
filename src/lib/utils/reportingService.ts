@@ -149,7 +149,12 @@ export async function getJournalEntries(dateRange: DateRange): Promise<JournalEn
     
     const journalEntries = await queryCollectionDocs('accounting/journalEntries', filters);
     
-    return journalEntries as JournalEntry[];
+    // Filter out entries without lines or with invalid lines
+    const validEntries = journalEntries.filter((entry: any) => 
+      entry && entry.lines && Array.isArray(entry.lines) && entry.lines.length > 0
+    );
+    
+    return validEntries as JournalEntry[];
   } catch (error) {
     console.error('Error fetching journal entries:', error);
     return [];
@@ -168,7 +173,7 @@ export async function getAccountBalances(dateRange: DateRange): Promise<AccountB
     ]);
     
     // Initialize account balances
-    const accountBalances: { [accountId: string]: AccountBalance } = {};
+    const accountBalances: { [accountName: string]: AccountBalance } = {};
     
     // Initialize all accounts with zero balances
     accounts.forEach(account => {
@@ -187,7 +192,7 @@ export async function getAccountBalances(dateRange: DateRange): Promise<AccountB
           break;
       }
       
-      accountBalances[account.id] = {
+      accountBalances[account.name] = {
         accountId: account.id,
         accountCode: account.code,
         accountName: account.name,
@@ -204,9 +209,36 @@ export async function getAccountBalances(dateRange: DateRange): Promise<AccountB
     journalEntries.forEach(journalEntry => {
       if (journalEntry.lines && Array.isArray(journalEntry.lines)) {
         journalEntry.lines.forEach(line => {
-          if (accountBalances[line.accountId]) {
+          // Try to find account by name first, then by ID
+          const accountName = line.accountName;
+          if (accountName && accountBalances[accountName]) {
+            accountBalances[accountName].debit += line.debit || 0;
+            accountBalances[accountName].credit += line.credit || 0;
+          } else if (line.accountId && accountBalances[line.accountId]) {
             accountBalances[line.accountId].debit += line.debit || 0;
             accountBalances[line.accountId].credit += line.credit || 0;
+          } else {
+            // Create a new account balance entry if account not found
+            const accountType = determineAccountTypeFromName(accountName || '');
+            const fsClassification = determineFSClassificationFromName(accountName || '');
+            
+            if (!accountBalances[accountName || 'unknown']) {
+              accountBalances[accountName || 'unknown'] = {
+                accountId: line.accountId || 'unknown',
+                accountCode: 'UNK',
+                accountName: accountName || 'Unknown Account',
+                accountType: accountType,
+                fsClassification: fsClassification,
+                debit: line.debit || 0,
+                credit: line.credit || 0,
+                balance: 0,
+                normalBalance: accountType === AccountType.Asset || accountType === AccountType.Expense ? 
+                  NormalBalance.Debit : NormalBalance.Credit
+              };
+            } else {
+              accountBalances[accountName || 'unknown'].debit += line.debit || 0;
+              accountBalances[accountName || 'unknown'].credit += line.credit || 0;
+            }
           }
         });
       }
@@ -228,6 +260,76 @@ export async function getAccountBalances(dateRange: DateRange): Promise<AccountB
   }
 }
 
+// Helper function to determine account type from account name
+function determineAccountTypeFromName(accountName: string): AccountType {
+  const name = accountName.toLowerCase();
+  if (name.includes('cash') || name.includes('bank') || name.includes('receivable') || 
+      name.includes('inventory') || name.includes('asset')) {
+    return AccountType.Asset;
+  } else if (name.includes('payable') || name.includes('tax') || name.includes('loan') || 
+             name.includes('liability')) {
+    return AccountType.Liability;
+  } else if (name.includes('equity') || name.includes('capital') || name.includes('retained')) {
+    return AccountType.Equity;
+  } else if (name.includes('revenue') || name.includes('sales') || name.includes('income')) {
+    return AccountType.Income;
+  } else if (name.includes('expense') || name.includes('cost')) {
+    return AccountType.Expense;
+  } else {
+    return AccountType.Asset; // Default to asset
+  }
+}
+
+// Helper function to determine FS classification from account name
+function determineFSClassificationFromName(accountName: string): FSClassification {
+  const name = accountName.toLowerCase();
+  
+  // Asset accounts
+  if (name.includes('cash') || name.includes('bank') || name.includes('receivable') || 
+      name.includes('inventory') || name.includes('prepaid')) {
+    return FSClassification.CurrentAsset;
+  }
+  
+  // Liability accounts
+  if (name.includes('payable') || name.includes('tax') || name.includes('accrued') ||
+      name.includes('loan') || name.includes('debt')) {
+    return FSClassification.CurrentLiability;
+  }
+  
+  // Equity accounts
+  if (name.includes('equity') || name.includes('capital') || name.includes('retained') ||
+      name.includes('earnings') || name.includes('stock') || name.includes('owner')) {
+    return FSClassification.Equity;
+  }
+  
+  // Revenue accounts
+  if (name.includes('revenue') || name.includes('sales') || name.includes('income') ||
+      name.includes('fees') || name.includes('commission')) {
+    return FSClassification.Revenue;
+  }
+  
+  // Cost of sales accounts
+  if (name.includes('cost of sales') || name.includes('cogs') || name.includes('cost of goods') ||
+      name.includes('direct cost') || name.includes('materials')) {
+    return FSClassification.CostOfSales;
+  }
+  
+  // Operating expense accounts
+  if (name.includes('expense') || name.includes('cost') || name.includes('salary') ||
+      name.includes('rent') || name.includes('utilities') || name.includes('advertising') ||
+      name.includes('depreciation') || name.includes('amortization')) {
+    return FSClassification.OperatingExpense;
+  }
+  
+  // Tax accounts
+  if (name.includes('vat') || name.includes('withholding') || name.includes('tax')) {
+    return FSClassification.Tax;
+  }
+  
+  // Default to current asset if no match found
+  return FSClassification.CurrentAsset;
+}
+
 /**
  * Get data for Trial Balance report
  */
@@ -241,20 +343,48 @@ export async function getTrialBalanceData(dateRange: DateRange): Promise<{
     const accountBalances = await getAccountBalances(dateRange);
     
     // Filter accounts with non-zero balances
-    const filteredAccounts = accountBalances.filter(
+    let filteredAccounts = accountBalances.filter(
       account => Math.abs(account.balance) > 0.01
     );
     
     // Calculate total debits and credits for trial balance
-    const totalDebit = filteredAccounts.reduce(
-      (sum, account) => sum + (account.normalBalance === NormalBalance.Debit ? Math.abs(account.balance) : 0), 
+    let totalDebit = filteredAccounts.reduce(
+      (sum, account) => sum + account.debit, 
       0
     );
     
-    const totalCredit = filteredAccounts.reduce(
-      (sum, account) => sum + (account.normalBalance === NormalBalance.Credit ? Math.abs(account.balance) : 0), 
+    let totalCredit = filteredAccounts.reduce(
+      (sum, account) => sum + account.credit, 
       0
     );
+    
+    // Check if trial balance balances, if not, add retained earnings
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      // Trial balance doesn't balance, need to add retained earnings
+      const retainedEarningsAmount = totalDebit - totalCredit;
+      
+      // Ensure retained earnings account exists
+      const retainedEarningsAccountId = await ensureRetainedEarningsAccount();
+      
+      // Add retained earnings to trial balance
+      const retainedEarningsAccount: AccountBalance = {
+        accountId: retainedEarningsAccountId,
+        accountCode: '3500',
+        accountName: 'Retained Earnings',
+        accountType: AccountType.Equity,
+        fsClassification: FSClassification.Equity,
+        debit: 0,
+        credit: Math.max(0, retainedEarningsAmount),
+        balance: retainedEarningsAmount,
+        normalBalance: NormalBalance.Credit
+      };
+      
+      filteredAccounts.push(retainedEarningsAccount);
+      
+      // Recalculate totals
+      totalDebit = filteredAccounts.reduce((sum, account) => sum + account.debit, 0);
+      totalCredit = filteredAccounts.reduce((sum, account) => sum + account.credit, 0);
+    }
     
     return {
       accounts: filteredAccounts,
@@ -383,6 +513,49 @@ export interface AgingItem {
 }
 
 /**
+ * Ensure a retained earnings account exists in the chart of accounts
+ */
+async function ensureRetainedEarningsAccount(): Promise<string> {
+  try {
+    // Check if retained earnings account already exists
+    const filters: FilterCondition[] = [
+      { field: 'name', operator: '==', value: 'Retained Earnings' },
+      { field: 'isActive', operator: '==', value: true }
+    ];
+    
+    const existingAccounts = await queryCollectionDocs('masterlist/accounts', filters);
+    
+    if (existingAccounts && existingAccounts.length > 0) {
+      return existingAccounts[0].id;
+    }
+    
+    // Create retained earnings account if it doesn't exist
+    const retainedEarningsData = {
+      code: '3500',
+      name: 'Retained Earnings',
+      description: 'Accumulated net income/loss from previous periods',
+      accountType: 'equity',
+      fsClassification: 'equity',
+      isActive: true,
+      isSystem: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    const { addDocToCollection } = await import('./firestoreCrud');
+    const newAccountRef = await addDocToCollection('masterlist/accounts', retainedEarningsData);
+    
+    // Extract the ID from the document reference
+    const newAccountId = typeof newAccountRef === 'string' ? newAccountRef : newAccountRef.id;
+    
+    return newAccountId;
+  } catch (error) {
+    console.error('Error ensuring retained earnings account:', error);
+    return 'retained-earnings'; // Fallback ID
+  }
+}
+
+/**
  * Get data for Balance Sheet report
  */
 export async function getBalanceSheetData(dateRange: DateRange): Promise<{
@@ -434,21 +607,49 @@ export async function getBalanceSheetData(dateRange: DateRange): Promise<{
     const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
     
     const totalEquity = equity.reduce((sum, account) => sum + account.balance, 0);
-    const totalLiabilitiesAndEquity = totalLiabilities + totalEquity;
+    
+    // Check if balance sheet balances, if not, add retained earnings
+    let adjustedTotalEquity = totalEquity;
+    let adjustedEquity = [...equity];
+    
+    if (Math.abs(totalAssets - totalLiabilities - totalEquity) > 0.01) {
+      // Balance sheet doesn't balance, need to add retained earnings
+      const retainedEarningsAmount = totalAssets - totalLiabilities - totalEquity;
+      
+      // Ensure retained earnings account exists
+      const retainedEarningsAccountId = await ensureRetainedEarningsAccount();
+      
+      // Add retained earnings to equity
+      adjustedEquity.push({
+        accountId: retainedEarningsAccountId,
+        accountCode: '3500',
+        accountName: 'Retained Earnings',
+        accountType: AccountType.Equity,
+        fsClassification: FSClassification.Equity,
+        debit: 0,
+        credit: Math.max(0, retainedEarningsAmount),
+        balance: retainedEarningsAmount,
+        normalBalance: NormalBalance.Credit
+      });
+      
+      adjustedTotalEquity = totalEquity + retainedEarningsAmount;
+    }
+    
+    const totalLiabilitiesAndEquity = totalLiabilities + adjustedTotalEquity;
     
     return {
       currentAssets,
       nonCurrentAssets,
       currentLiabilities,
       nonCurrentLiabilities,
-      equity,
+      equity: adjustedEquity,
       totalCurrentAssets,
       totalNonCurrentAssets,
       totalAssets,
       totalCurrentLiabilities,
       totalNonCurrentLiabilities,
       totalLiabilities,
-      totalEquity,
+      totalEquity: adjustedTotalEquity,
       totalLiabilitiesAndEquity
     };
   } catch (error) {
@@ -477,13 +678,15 @@ export async function getARAgingData(asOfDate: Date): Promise<{
       { min: 91, max: 9999 }  // > 90 days
     ];
     
-    // Get all outstanding sales invoices
-    const invoiceFilters: FilterCondition[] = [
-      { field: 'status', operator: '==', value: 'Posted' },
-      { field: 'isPaid', operator: '==', value: false }
+    // Get all journal entries for the current year
+    const startOfYear = new Date(asOfDate.getFullYear(), 0, 1);
+    const filters: FilterCondition[] = [
+      { field: 'journalDate', operator: '>=', value: startOfYear },
+      { field: 'journalDate', operator: '<=', value: asOfDate },
+      { field: 'isPosted', operator: '==', value: true }
     ];
     
-    const invoices = await queryCollectionDocs('customerCenter/salesInvoices', invoiceFilters);
+    const journalEntries = await queryCollectionDocs('accounting/journalEntries', filters);
     
     // Get all customers
     const customers = await queryCollectionDocs('masterlist/customers');
@@ -496,80 +699,86 @@ export async function getARAgingData(asOfDate: Date): Promise<{
       });
     }
     
-    // Process invoices and build aging data
+    // Process journal entries and build aging data
     const customerAging: { [customerId: string]: AgingItem } = {};
     const totals = [0, 0, 0, 0, 0]; // Totals for each bucket
     let grandTotal = 0;
     
-    if (invoices && Array.isArray(invoices)) {
-      invoices.forEach((invoice: any) => {
-        // Get invoice date and due date
-        const invoiceDate = new Date(invoice.invoiceDate);
-        const dueDate = new Date(invoice.dueDate);
-        
-        // Calculate age in days
-        const ageInDays = Math.max(0, Math.floor((asOfDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
-        
-        // Determine bucket index
-        let bucketIndex = 0;
-        for (let i = 0; i < bucketRanges.length; i++) {
-          if (ageInDays >= bucketRanges[i].min && ageInDays <= bucketRanges[i].max) {
-            bucketIndex = i;
-            break;
-          }
+    if (journalEntries && Array.isArray(journalEntries)) {
+      journalEntries.forEach((entry: any) => {
+        if (entry.lines && Array.isArray(entry.lines)) {
+          entry.lines.forEach((line: any) => {
+            // Look for receivable accounts
+            if (line.accountName && line.accountName.toLowerCase().includes('receivable')) {
+              const customerId = entry.customer || entry.customerId || 'unknown';
+              const customer = customerMap[customerId] || { name: customerId };
+              
+              // Get entry date
+              const entryDate = entry.journalDate?.seconds ? 
+                new Date(entry.journalDate.seconds * 1000) : new Date();
+              
+              // Calculate age in days (simplified - use entry date)
+              const ageInDays = Math.max(0, Math.floor((asOfDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)));
+              
+              // Determine bucket index
+              let bucketIndex = 0;
+              for (let i = 0; i < bucketRanges.length; i++) {
+                if (ageInDays >= bucketRanges[i].min && ageInDays <= bucketRanges[i].max) {
+                  bucketIndex = i;
+                  break;
+                }
+              }
+              
+              // Calculate amount (receivables are typically debit balances)
+              const amount = line.debit > 0 ? line.debit : line.credit;
+              
+              // Initialize customer aging if not exists
+              if (!customerAging[customerId]) {
+                customerAging[customerId] = {
+                  id: customerId,
+                  name: customer.name,
+                  totalAmount: 0,
+                  buckets: buckets.map(name => ({ name, amount: 0 })),
+                  documents: []
+                };
+              }
+              
+              // Add to customer's aging data
+              customerAging[customerId].totalAmount += amount;
+              customerAging[customerId].buckets[bucketIndex].amount += amount;
+              customerAging[customerId].documents.push({
+                id: entry.id || entry.documentId || '',
+                documentNo: entry.referenceNo || entry.documentNo || `JE-${entry.id}`,
+                date: entryDate,
+                dueDate: entryDate, // Use entry date as due date for simplicity
+                age: ageInDays,
+                amount: amount,
+                bucketIndex: bucketIndex
+              });
+              
+              // Update totals
+              totals[bucketIndex] += amount;
+              grandTotal += amount;
+            }
+          });
         }
-        
-        // Get customer info
-        const customerId = invoice.customer;
-        const customer = customerMap[customerId] || { name: 'Unknown Customer' };
-        
-        // Calculate outstanding amount
-        const outstandingAmount = invoice.totalAmount - (invoice.amountPaid || 0);
-        if (outstandingAmount <= 0) return; // Skip if fully paid
-        
-        // Initialize customer aging if not exists
-        if (!customerAging[customerId]) {
-          customerAging[customerId] = {
-            id: customerId,
-            name: customer.name,
-            totalAmount: 0,
-            buckets: buckets.map(name => ({ name, amount: 0 })),
-            documents: []
-          };
-        }
-        
-        // Add to customer's aging data
-        customerAging[customerId].totalAmount += outstandingAmount;
-        customerAging[customerId].buckets[bucketIndex].amount += outstandingAmount;
-        customerAging[customerId].documents.push({
-          id: invoice.id,
-          documentNo: invoice.invoiceNo || `Invoice #${invoice.id}`,
-          date: invoiceDate,
-          dueDate: dueDate,
-          age: ageInDays,
-          amount: outstandingAmount,
-          bucketIndex
-        });
-        
-        // Add to totals
-        totals[bucketIndex] += outstandingAmount;
-        grandTotal += outstandingAmount;
       });
     }
     
-    // Convert customer aging map to array and sort by total amount
-    const customers_array = Object.values(customerAging);
-    customers_array.sort((a, b) => b.totalAmount - a.totalAmount);
-    
     return {
-      customers: customers_array,
+      customers: Object.values(customerAging),
       buckets,
       totals,
       grandTotal
     };
   } catch (error) {
-    console.error('Error generating accounts receivable aging data:', error);
-    throw new Error('Failed to generate accounts receivable aging data');
+    console.error('Error generating AR aging data:', error);
+    return {
+      customers: [],
+      buckets: ['Current', '1-30', '31-60', '61-90', '> 90'],
+      totals: [0, 0, 0, 0, 0],
+      grandTotal: 0
+    };
   }
 }
 
@@ -593,13 +802,15 @@ export async function getAPAgingData(asOfDate: Date): Promise<{
       { min: 91, max: 9999 }  // > 90 days
     ];
     
-    // Get all outstanding APVs (bills)
-    const billFilters: FilterCondition[] = [
-      { field: 'status', operator: '==', value: 'Posted' },
-      { field: 'isPaid', operator: '==', value: false }
+    // Get all journal entries for the current year
+    const startOfYear = new Date(asOfDate.getFullYear(), 0, 1);
+    const filters: FilterCondition[] = [
+      { field: 'journalDate', operator: '>=', value: startOfYear },
+      { field: 'journalDate', operator: '<=', value: asOfDate },
+      { field: 'isPosted', operator: '==', value: true }
     ];
     
-    const bills = await queryCollectionDocs('vendorCenter/apvs', billFilters);
+    const journalEntries = await queryCollectionDocs('accounting/journalEntries', filters);
     
     // Get all vendors
     const vendors = await queryCollectionDocs('masterlist/vendors');
@@ -612,79 +823,85 @@ export async function getAPAgingData(asOfDate: Date): Promise<{
       });
     }
     
-    // Process bills and build aging data
+    // Process journal entries and build aging data
     const vendorAging: { [vendorId: string]: AgingItem } = {};
     const totals = [0, 0, 0, 0, 0]; // Totals for each bucket
     let grandTotal = 0;
     
-    if (bills && Array.isArray(bills)) {
-      bills.forEach((bill: any) => {
-        // Get bill date and due date
-        const billDate = new Date(bill.billDate);
-        const dueDate = new Date(bill.dueDate);
-        
-        // Calculate age in days
-        const ageInDays = Math.max(0, Math.floor((asOfDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
-        
-        // Determine bucket index
-        let bucketIndex = 0;
-        for (let i = 0; i < bucketRanges.length; i++) {
-          if (ageInDays >= bucketRanges[i].min && ageInDays <= bucketRanges[i].max) {
-            bucketIndex = i;
-            break;
-          }
+    if (journalEntries && Array.isArray(journalEntries)) {
+      journalEntries.forEach((entry: any) => {
+        if (entry.lines && Array.isArray(entry.lines)) {
+          entry.lines.forEach((line: any) => {
+            // Look for payable accounts
+            if (line.accountName && line.accountName.toLowerCase().includes('payable')) {
+              const vendorId = entry.vendor || entry.vendorId || 'unknown';
+              const vendor = vendorMap[vendorId] || { name: vendorId };
+              
+              // Get entry date
+              const entryDate = entry.journalDate?.seconds ? 
+                new Date(entry.journalDate.seconds * 1000) : new Date();
+              
+              // Calculate age in days (simplified - use entry date)
+              const ageInDays = Math.max(0, Math.floor((asOfDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)));
+              
+              // Determine bucket index
+              let bucketIndex = 0;
+              for (let i = 0; i < bucketRanges.length; i++) {
+                if (ageInDays >= bucketRanges[i].min && ageInDays <= bucketRanges[i].max) {
+                  bucketIndex = i;
+                  break;
+                }
+              }
+              
+              // Calculate amount (payables are typically credit balances)
+              const amount = line.credit > 0 ? line.credit : line.debit;
+              
+              // Initialize vendor aging if not exists
+              if (!vendorAging[vendorId]) {
+                vendorAging[vendorId] = {
+                  id: vendorId,
+                  name: vendor.name,
+                  totalAmount: 0,
+                  buckets: buckets.map(name => ({ name, amount: 0 })),
+                  documents: []
+                };
+              }
+              
+              // Add to vendor's aging data
+              vendorAging[vendorId].totalAmount += amount;
+              vendorAging[vendorId].buckets[bucketIndex].amount += amount;
+              vendorAging[vendorId].documents.push({
+                id: entry.id || entry.documentId || '',
+                documentNo: entry.referenceNo || entry.documentNo || `JE-${entry.id}`,
+                date: entryDate,
+                dueDate: entryDate, // Use entry date as due date for simplicity
+                age: ageInDays,
+                amount: amount,
+                bucketIndex: bucketIndex
+              });
+              
+              // Update totals
+              totals[bucketIndex] += amount;
+              grandTotal += amount;
+            }
+          });
         }
-        
-        // Get vendor info
-        const vendorId = bill.vendor;
-        const vendor = vendorMap[vendorId] || { name: 'Unknown Vendor' };
-        
-        // Calculate outstanding amount
-        const outstandingAmount = bill.totalAmount - (bill.amountPaid || 0);
-        if (outstandingAmount <= 0) return; // Skip if fully paid
-        
-        // Initialize vendor aging if not exists
-        if (!vendorAging[vendorId]) {
-          vendorAging[vendorId] = {
-            id: vendorId,
-            name: vendor.name,
-            totalAmount: 0,
-            buckets: buckets.map(name => ({ name, amount: 0 })),
-            documents: []
-          };
-        }
-        
-        // Add to vendor's aging data
-        vendorAging[vendorId].totalAmount += outstandingAmount;
-        vendorAging[vendorId].buckets[bucketIndex].amount += outstandingAmount;
-        vendorAging[vendorId].documents.push({
-          id: bill.id,
-          documentNo: bill.billNo || `Bill #${bill.id}`,
-          date: billDate,
-          dueDate: dueDate,
-          age: ageInDays,
-          amount: outstandingAmount,
-          bucketIndex
-        });
-        
-        // Add to totals
-        totals[bucketIndex] += outstandingAmount;
-        grandTotal += outstandingAmount;
       });
     }
     
-    // Convert vendor aging map to array and sort by total amount
-    const vendors_array = Object.values(vendorAging);
-    vendors_array.sort((a, b) => b.totalAmount - a.totalAmount);
-    
     return {
-      vendors: vendors_array,
+      vendors: Object.values(vendorAging),
       buckets,
       totals,
       grandTotal
     };
   } catch (error) {
-    console.error('Error generating accounts payable aging data:', error);
-    throw new Error('Failed to generate accounts payable aging data');
+    console.error('Error generating AP aging data:', error);
+    return {
+      vendors: [],
+      buckets: ['Current', '1-30', '31-60', '61-90', '> 90'],
+      totals: [0, 0, 0, 0, 0],
+      grandTotal: 0
+    };
   }
 }

@@ -1,7 +1,12 @@
 <script lang="ts">
   import MasterListContainer from '$lib/components/MasterListContainer.svelte';
   import ModalForm from '$lib/components/ModalForm.svelte';
-  import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { addDocToCollection, updateDocInCollection, deleteDocFromCollection, queryCollectionDocs } from '$lib/utils/firestoreCrud';
+  import { parseCSVToRecords } from '$lib/utils/csvParser';
+  import { readFileAsTextSmart } from '$lib/utils/fileEncoding';
+  import { exportNestedFirestoreCollectionToCSV, type ExportColumn } from '$lib/utils/csvExporter';
+  import { orderBy } from 'firebase/firestore';
+  import type { QueryConstraint } from 'firebase/firestore';
 
   // Config for form fields
   $: vendorFields = [
@@ -21,6 +26,7 @@
     { label: 'Contact Person', key: 'contact_person' },
     { label: 'Phone', key: 'phone' },
     { label: 'Email', key: 'email' },
+    { label: 'Address', key: 'address' },
     { label: 'Tax ID', key: 'tax_id' },
     { label: 'Status', key: 'is_active', format: (value: boolean) => value ? 'Active' : 'Inactive' }
   ];
@@ -30,6 +36,9 @@
   const parentCollection = 'masterlist';
   const subCollectionName = 'vendors';
   const collectionPath = 'masterlist/vendors';
+  
+  // Default sort by code
+  const queryOptions: QueryConstraint[] = [orderBy('code')];
   
   // ListContainer configuration
   const documentType = 'vendor';
@@ -44,6 +53,96 @@
       color: 'primary',
       icon: 'material-symbols:add',
       onClick: handleAdd
+    },
+    {
+      label: 'Import CSV',
+      color: 'outline',
+      icon: 'material-symbols:upload',
+      onClick: () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.csv';
+        input.onchange = async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const text = await readFileAsTextSmart(file);
+          const records = parseCSVToRecords(text);
+          
+          // Wipe existing collection before importing new records
+          if (confirm('Importing will delete all existing vendors in this list. Continue?')) {
+            try {
+              const existing = await queryCollectionDocs(collectionPath);
+              if (existing && existing.length > 0) {
+                for (const doc of existing) {
+                  try { await deleteDocFromCollection(collectionPath, doc.id); } catch (e) { console.warn('Delete failed for', doc.id, e); }
+                }
+              }
+            } catch (e) {
+              console.error('Error deleting existing vendors:', e);
+            }
+          } else {
+            return;
+          }
+          
+          for (const rec of records) {
+            const payload = {
+              code: rec.code || rec.vendor_code || '',
+              name: rec.name || rec.vendor_name || '',
+              contact_person: rec.contact_person || '',
+              phone: rec.phone || '',
+              email: rec.email || '',
+              address: rec.address || '',
+              tax_id: rec.tax_id || rec.tin || '',
+              is_active: String(rec.is_active).toLowerCase() !== 'false',
+              created_at: new Date(),
+              updated_at: new Date()
+            };
+            
+            if (payload.code && payload.name) {
+              try { 
+                await addDocToCollection(collectionPath, payload);
+              } catch (error) {
+                console.error('Error saving:', error);
+              }
+            }
+          }
+          alert('Vendor import finished.');
+        };
+        input.click();
+      }
+    },
+    {
+      label: 'Sample CSV',
+      color: 'outline',
+      icon: 'material-symbols:description',
+      onClick: () => {
+        const sample = 'code,name,contact_person,phone,email,address,tax_id,is_active\nVEND-001,Manila Paper Supply Co,John Doe,09181234567,john.doe@manilapaper.com,"456 Industrial Avenue, Quezon City, Metro Manila",321-654-987-000,true\nVEND-002,Philippine Office Solutions,Sarah Lee,09271234567,sarah.lee@philoffice.ph,"Unit 789, Business Park, Ortigas, Pasig City",654-321-987-000,true\nVEND-003,Metro Cleaning Services,Ricardo Gomez,09351234567,ricardo@metroclean.com,"Building 12, Service Center, Marikina City",789-456-123-000,true\nVEND-004,Cebu Food Distributors,Elena Martinez,09421234567,elena@cebufood.com,"Wholesale Market, Lahug, Cebu City",456-123-789-000,true\nVEND-005,IT Hardware Plus,Mark Wilson,09531234567,mark@ithardware.ph,"Tech Hub, Eastwood, Quezon City",123-789-456-000,true\nVEND-006,Construction Materials Inc,Pedro Reyes,09641234567,pedro@constructmat.com,"Industrial Zone, Caloocan City",987-321-654-000,true\nVEND-007,Davao Agricultural Supply,Lisa Tan,09751234567,lisa@davaoagri.ph,"Agri Center, Davao City",321-987-654-000,false';
+        const blob = new Blob([sample], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'vendors_sample.csv'; a.click();
+        URL.revokeObjectURL(url);
+      }
+    },
+    {
+      label: 'Export CSV',
+      color: 'outline',
+      icon: 'material-symbols:download',
+      onClick: async () => {
+        const exportColumns: ExportColumn[] = [
+          { key: 'code', label: 'Code' },
+          { key: 'name', label: 'Name' },
+          { key: 'contact_person', label: 'Contact Person' },
+          { key: 'phone', label: 'Phone' },
+          { key: 'email', label: 'Email' },
+          { key: 'address', label: 'Address' },
+          { key: 'tax_id', label: 'Tax ID' },
+          { key: 'is_active', label: 'Active', format: (value: boolean) => value ? 'true' : 'false' }
+        ];
+        
+        const filename = `vendors_export_${new Date().toISOString().split('T')[0]}.csv`;
+        await exportNestedFirestoreCollectionToCSV(rootCollection, parentCollection, subCollectionName, exportColumns, filename, 'code');
+      }
     }
   ];
   let showModal = false;
@@ -185,7 +284,7 @@
     {primaryColorClass}
     {columns}
     {buttons}
-    queryOptions={[]}
+    {queryOptions}
     defaultButtons={false}
     allowDelete={false}
   >

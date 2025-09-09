@@ -44,8 +44,8 @@
           {#each columns as col, colIndex}
             <td class="align-middle border-b border-gray-100" style="padding: 0.25rem 0.5rem;">
               {#if editable && col.type === 'select'}
-                <select class="w-full bg-transparent text-gray-700 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 px-2 py-1.5 text-sm" bind:value={(row as Record<string, any>)[col.key]}>
-                  <option value="" disabled selected>{col.label}</option>
+                <select class="w-full bg-transparent text-gray-700 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 px-2 py-1.5 text-sm" bind:value={(row as Record<string, any>)[col.key]} on:change={(e) => onUpdate(idx, col.key, (e.target as HTMLSelectElement).value)}>
+                  <!-- Do not force a disabled placeholder so that a valid empty option like 'N/A' can be selected -->
                   {#if typeof (col as any).options === 'function'}
                     <!-- Handle function-based options (like getEntityOptions) -->
                     {@const optionsArray = (col as any).options(row) || []}

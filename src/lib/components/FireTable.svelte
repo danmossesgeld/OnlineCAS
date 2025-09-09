@@ -12,8 +12,12 @@
   export let rootCollection: string = '';      // Root collection name (e.g., 'transactions')
   export let parentCollection: string = '';    // Parent collection name (e.g., 'customerCenter')
   export let subCollectionName: string = '';   // Subcollection name (e.g., 'salesInvoices')
-  export let columns: Array<{ label: string; key: string; width?: string; type?: string }> = [];
+  export let columns: Array<{ label: string; key: string; width?: string; type?: string; render?: (row: any) => string }> = [];
   export let queryOptions: QueryConstraint[] = [];
+  // Hierarchy support (auto-detected by default). If rows contain parentId, we order parent -> children and add _depth and parentName
+  export let enableHierarchy: boolean = true;
+  export let hierarchyField: string = 'parentId';
+  export let nameField: string = 'name';
   
   // Provided for external reference - not used in this component
   export const actions = () => null;
@@ -51,12 +55,12 @@
       if (effectiveRoot && effectiveParent && effectiveSub) {
         // Three-level collection structure with explicit root
         unsub = collectionStore(effectiveParent, effectiveSub, queryOptions, effectiveRoot)
-          .subscribe(data => { rows = data; });
+          .subscribe(data => { rows = processRows(data); });
       } 
       else if (effectiveParent && effectiveSub) {
         // Two-level collection structure with implicit root
         unsub = collectionStore(effectiveParent, effectiveSub, queryOptions)
-          .subscribe(data => { rows = data; });
+          .subscribe(data => { rows = processRows(data); });
       }
       else {
         console.error('Invalid collection path configuration');
@@ -68,6 +72,40 @@
     }
   }
   onDestroy(() => { if (unsub) unsub(); });
+
+  function processRows(data: any[]): any[] {
+    if (!Array.isArray(data)) return [];
+    if (!enableHierarchy) return data;
+    // Auto-enable only if some row has a non-empty parent id
+    const hasParent = data.some(r => !!r?.[hierarchyField]);
+    if (!hasParent) return data;
+    const byId: Record<string, any> = {};
+    const children: Record<string, any[]> = {};
+    for (const r of data) {
+      byId[r.id] = r;
+      const p = r[hierarchyField];
+      if (p) {
+        if (!children[p]) children[p] = [];
+        children[p].push(r);
+      }
+    }
+    const roots = data.filter(r => !r[hierarchyField]);
+    // Sort by code or name if code missing
+    const sortKey = (x: any) => String(x.code ?? x[nameField] ?? '');
+    roots.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+    const result: any[] = [];
+    const visit = (node: any, depth = 0) => {
+      const parentId = node[hierarchyField];
+      if (parentId && byId[parentId]) {
+        node.parentName = byId[parentId]?.[nameField] ?? node.parentName;
+      }
+      result.push({ ...node, _depth: depth });
+      const kids = (children[node.id] || []).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+      for (const k of kids) visit(k, depth + 1);
+    };
+    for (const r of roots) visit(r, 0);
+    return result;
+  }
 </script>
 
 <div class="overflow-x-auto w-full">
@@ -85,7 +123,9 @@
         <tr class="{idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50 transition-colors duration-150">
           {#each columns as col}
             <td class="px-4 py-3 align-middle border-b border-gray-100">
-              {#if col.type === 'date' || col.key.toLowerCase().includes('date')}
+              {#if col.render}
+                {@html col.render(row)}
+              {:else if col.type === 'date' || col.key.toLowerCase().includes('date')}
                 {#if row[col.key]}
                   <span class="text-gray-600">
                     {#if row[col.key] instanceof Date}

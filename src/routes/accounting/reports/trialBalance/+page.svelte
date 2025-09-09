@@ -54,20 +54,7 @@
     
     // Add accounts
     reportData.accounts.forEach(account => {
-      let debitValue = 0;
-      let creditValue = 0;
-      
-      if (account.normalBalance === 'debit' && account.balance > 0) {
-        debitValue = account.balance;
-      } else if (account.normalBalance === 'debit' && account.balance < 0) {
-        creditValue = Math.abs(account.balance);
-      } else if (account.normalBalance === 'credit' && account.balance > 0) {
-        creditValue = account.balance;
-      } else if (account.normalBalance === 'credit' && account.balance < 0) {
-        debitValue = Math.abs(account.balance);
-      }
-      
-      csvContent += `"${account.accountCode}","${account.accountName}","${debitValue}","${creditValue}"\n`;
+      csvContent += `"${account.accountCode}","${account.accountName}","${account.debit}","${account.credit}"\n`;
     });
     
     // Add totals
@@ -137,15 +124,15 @@
                   {account.accountName}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                  {#if (account.normalBalance === 'debit' && account.balance > 0) || (account.normalBalance === 'credit' && account.balance < 0)}
-                    {formatCurrency(Math.abs(account.balance))}
+                  {#if account.debit > 0}
+                    {formatCurrency(account.debit)}
                   {:else}
                     -
                   {/if}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                  {#if (account.normalBalance === 'credit' && account.balance > 0) || (account.normalBalance === 'debit' && account.balance < 0)}
-                    {formatCurrency(Math.abs(account.balance))}
+                  {#if account.credit > 0}
+                    {formatCurrency(account.credit)}
                   {:else}
                     -
                   {/if}

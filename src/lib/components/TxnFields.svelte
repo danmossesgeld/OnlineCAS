@@ -4,7 +4,7 @@
    * - Add a 'row' property to any field to group fields in the same row.
    * - If no 'row' is specified, fields are grouped by index in sets of 3.
    */
-  export let fields: Array<{
+  type FieldType = {
     label: string;
     name: string;
     type?: string;
@@ -14,7 +14,14 @@
     required?: boolean;
     class?: string;
     row?: string | number;
-  }> = [];
+    disabled?: boolean;
+    min?: number;
+    max?: number;
+    step?: number;
+    onChange?: (e: Event) => void;
+  };
+
+  export let fields: FieldType[] = [];
   export let formData: Record<string, any> = {};
   export let disabled = false; // Add disabled prop for view mode
 
@@ -88,15 +95,16 @@
               {disabled}
             ></textarea>
           {:else if field.type === 'checkbox'}
-            <div class="form-control flex items-center gap-2 mb-2">
+            <div class="form-control flex items-center gap-2">
+              <label for={`field-${field.name}`} class="label-text text-sm text-gray-700 cursor-pointer">{field.label}</label>
               <input 
                 id={`field-${field.name}`}
                 type="checkbox" 
                 class="checkbox checkbox-sm" 
                 bind:checked={formData[field.name]}
-                {disabled} 
+                on:change={field.onChange}
+                {disabled}
               />
-              <label for={`field-${field.name}`} class="label-text text-xs text-gray-700">{field.label}</label>
             </div>
           {:else}
             <input 
@@ -105,6 +113,9 @@
               type={field.type ?? 'text'} 
               placeholder={field.placeholder} 
               bind:value={formData[field.name]} 
+              min={field.min}
+              max={field.max}
+              step={field.step}
               required={field.required}
               {disabled} 
             />

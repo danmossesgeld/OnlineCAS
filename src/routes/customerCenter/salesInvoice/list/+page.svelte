@@ -2,12 +2,16 @@
   import ListContainer from '$lib/components/ListContainer.svelte';
   import { goto } from '$app/navigation';
 
+  const currency = (n: number | string) => (Number(n) || 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
   const columns = [
     { label: 'Invoice #', key: 'invoiceNo' },
     { label: 'Customer', key: 'customerName' },
     { label: 'Date', key: 'invoiceDate' },
     { label: 'Due Date', key: 'dueDate' },
-    { label: 'Amount', key: 'totalDue' },
+    // Amount should show the original invoice total, not the remaining balance
+    { label: 'Amount', key: 'amount', render: (row: any) => `<span class=\"font-medium text-gray-900\">${currency((row.netSales || 0) + (row.vat || 0))}</span>` },
+    // Show outstanding separately using totalDue (can be 0 when fully paid)
+    { label: 'Outstanding', key: 'totalDue' },
     { label: 'Status', key: 'status' },
     { label: 'Remarks', key: 'memo' }
   ];

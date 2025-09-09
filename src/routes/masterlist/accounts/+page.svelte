@@ -6,6 +6,8 @@
   import ModalForm from '$lib/components/ModalForm.svelte';
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
+  import { parseCSVToRecords } from '$lib/utils/csvParser';
+  import { exportNestedFirestoreCollectionToCSV, type ExportColumn } from '$lib/utils/csvExporter';
 
   // Define account type
   type AccountType = {
@@ -44,6 +46,7 @@
   type AccountOption = {
     label: string;
     value: string;
+    raw?: any;
   };
 
   function getEmptyFormData() {
@@ -75,7 +78,7 @@
   const documentType = 'account';
   const title = 'Chart of Accounts';
   const subtitle = 'Manage your Chart of Accounts';
-  const primaryColorClass = 'gray';
+  const primaryColorClass = 'indigo';
 
   // Account types based on the Laravel documentation
   const accountTypes = [
@@ -126,6 +129,113 @@
       color: 'primary',
       icon: 'material-symbols:add',
       onClick: handleAdd
+    },
+    {
+      label: 'Import CSV',
+      color: 'outline',
+      icon: 'material-symbols:upload',
+      onClick: () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.csv';
+        input.onchange = async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const text = await file.text();
+          const records = parseCSVToRecords(text);
+          
+          for (const rec of records) {
+            // Handle parent ID: Users enter account codes, we need to convert to document IDs
+            const parentCode = rec.parentid || rec.parent_id || rec.parent_code || '';
+            let resolvedParentId = null;
+            let resolvedParentName = '';
+            
+            if (parentCode) {
+              // Find parent account by code (not by document ID)
+              const parentAccount = parentAccountOptions.find(opt => 
+                opt.raw && opt.raw.code === parentCode
+              );
+              
+              if (parentAccount) {
+                resolvedParentId = parentAccount.value; // This is the document ID
+                resolvedParentName = parentAccount.label; // This is the account name
+              } else {
+                console.warn(`Parent account with code "${parentCode}" not found for account "${rec.code}"`);
+              }
+            }
+
+            const payload: Record<string, any> = {
+              code: rec.code || '',
+              name: rec.name || '',
+              description: rec.description || '',
+              accountType: (rec.accounttype || rec.account_type || rec.type || '').toLowerCase(),
+              fsClassification: (rec.fsclassification || rec.fs_classification || rec.classification || '').toLowerCase(),
+              glCode: rec.glcode || rec.gl_code || '',
+              glName: rec.glname || rec.gl_name || '',
+              slCode: rec.slcode || rec.sl_code || '',
+              slName: rec.slname || rec.sl_name || '',
+              parentId: resolvedParentId,
+              parentName: resolvedParentName,
+              isActive: String(rec.isactive || rec.is_active).toLowerCase() !== 'false',
+              isSystem: String(rec.issystem || rec.is_system).toLowerCase() === 'true',
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+            if (payload.code && payload.name && payload.accountType) {
+              try { await addDocToCollection(collectionPath, payload); } catch {}
+            }
+          }
+          alert('Accounts import finished');
+        };
+        input.click();
+      }
+    },
+    {
+      label: 'Sample CSV',
+      color: 'outline',
+      icon: 'material-symbols:description',
+      onClick: () => {
+        const sample = 'code,name,description,accountType,fsClassification,glCode,glName,slCode,slName,parentId,isActive,isSystem\n1000,Current Assets,Current asset accounts,asset,balance_sheet,100,Current Assets,,,,,true,false\n1010,Cash and Cash Equivalents,Cash accounts,asset,balance_sheet,101,Cash,,,1000,true,false\n1011,Cash on Hand,Physical cash in office,asset,balance_sheet,1011,Petty Cash,,,1010,true,false\n1012,Cash in Bank - BPI,Main operating account,asset,balance_sheet,1012,BPI Checking,,,1010,true,false\n1020,Accounts Receivable,Customer receivables,asset,balance_sheet,102,A/R,,,1000,true,false\n2000,Current Liabilities,Current liability accounts,liability,balance_sheet,200,Current Liab,,,,,true,false\n2010,Accounts Payable,Vendor payables,liability,balance_sheet,201,A/P,,,2000,true,false\n3000,Owner Equity,Equity accounts,equity,balance_sheet,300,Equity,,,,,true,false\n4000,Revenue,Income accounts,revenue,income_statement,400,Revenue,,,,,true,false\n4010,Sales Revenue,Product sales,revenue,income_statement,401,Sales,,,4000,true,false\n5000,Operating Expenses,Business expenses,expense,income_statement,500,Expenses,,,,,true,false\n5010,Office Supplies,Office supply expenses,expense,income_statement,501,Supplies,,,5000,true,false';
+        const blob = new Blob([sample], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'accounts_sample.csv'; a.click();
+        URL.revokeObjectURL(url);
+      }
+    },
+    {
+      label: 'Export CSV',
+      color: 'outline',
+      icon: 'material-symbols:download',
+      onClick: async () => {
+        const exportColumns: ExportColumn[] = [
+          { key: 'code', label: 'Code' },
+          { key: 'name', label: 'Name' },
+          { key: 'description', label: 'Description' },
+          { key: 'accountType', label: 'Account Type' },
+          { key: 'fsClassification', label: 'FS Classification' },
+          { key: 'glCode', label: 'GL Code' },
+          { key: 'glName', label: 'GL Name' },
+          { key: 'slCode', label: 'SL Code' },
+          { key: 'slName', label: 'SL Name' },
+          { 
+            key: 'parentId', 
+            label: 'Parent ID', 
+            format: (documentId: string) => {
+              if (!documentId) return '';
+              // Find the parent account by document ID and return its code
+              const parentAccount = parentAccountOptions.find(opt => opt.value === documentId);
+              return parentAccount?.raw?.code || '';
+            }
+          },
+          { key: 'parentName', label: 'Parent Name' },
+          { key: 'isActive', label: 'Active', format: (value: boolean) => value ? 'true' : 'false' },
+          { key: 'isSystem', label: 'System', format: (value: boolean) => value ? 'true' : 'false' }
+        ];
+        
+        const filename = `accounts_export_${new Date().toISOString().split('T')[0]}.csv`;
+        await exportNestedFirestoreCollectionToCSV(rootCollection, parentCollection, subCollectionName, exportColumns, filename, 'code');
+      }
     }
   ];
 
@@ -149,23 +259,40 @@
   let parentAccountOptions: AccountOption[] = [];
 
   // Subscribe to parent account options
-  createFirestoreOptionsStore('masterlist/accounts', 'name', 'id').subscribe(opts => {
+  createFirestoreOptionsStore('masterlist/accounts', 'name', 'id', true).subscribe(opts => {
     parentAccountOptions = [{ label: '-- No Parent --', value: '' }, ...opts];
   });
 
-  // Table columns
+  // For indentation visualize child accounts: assume codes like 10100 parent, 10101 child
+  function computeDepthFromCode(code: any): number {
+    const str = String(code || '');
+    // Count trailing zeros segments reduction as hierarchy hint; fallback to 0
+    if (!/^[0-9]+$/.test(str)) return 0;
+    // Example: 10100 -> depth 0, 10101 -> depth 1
+    // Basic heuristic: children often share prefix; we'll infer via presence of parentId when available
+    return 0;
+  }
+
+  // Table columns with render functions for indentation and proper display
   const columns = [
     { label: 'Code', key: 'code', width: '10%' },
-    { label: 'Name', key: 'name', width: '20%' },
-    { label: 'Type', key: 'accountType', formatter: formatAccountType, width: '15%' },
-    { label: 'Normal Balance', key: 'accountType', formatter: (value: string) => {
-      const accountType = accountTypes.find(type => type.value === value);
-      return accountType ? accountType.normalBalance : '';
-    }, width: '10%' },
-    { label: 'Classification', key: 'fsClassification', formatter: formatClassification, width: '15%' },
-    { label: 'GL Code', key: 'glCode', width: '10%' },
-    { label: 'Parent', key: 'parentName', width: '10%' },
-    { label: 'Status', key: 'isActive', format: (value: boolean) => value ? 'Active' : 'Inactive', width: '10%' }
+    {
+      label: 'Name',
+      key: 'name',
+      width: '24%',
+      render: (row: any) => {
+        const depth = typeof row._depth === 'number' ? row._depth : 0;
+        const pad = '&nbsp;'.repeat(depth * 16);
+        const bullet = depth > 0 ? '<span class="inline-block w-2 h-2 rounded-full bg-indigo-400 mr-2"></span>' : '';
+        return `${pad}${bullet}<span class=\"text-gray-700\">${row.name || ''}</span>`;
+      }
+    },
+    { label: 'Type', key: 'accountType', width: '12%', render: (row: any) => `<span class=\"text-gray-700\">${formatAccountType(row.accountType)}</span>` },
+    { label: 'Normal Balance', key: 'accountType', width: '12%', render: (row: any) => `<span class=\"text-gray-700\">${accountTypes.find(t => t.value === row.accountType)?.normalBalance || ''}</span>` },
+    { label: 'Classification', key: 'fsClassification', width: '16%', render: (row: any) => `<span class=\"text-gray-700\">${formatClassification(row.fsClassification)}</span>` },
+    { label: 'GL Code', key: 'glCode', width: '8%' },
+    { label: 'Parent', key: 'parentName', width: '10%', render: (row: any) => `<span class=\"text-gray-700\">${row.parentName || '-'}</span>` },
+    { label: 'Status', key: 'isActive', width: '8%', render: (row: any) => `<span class=\"text-gray-700\">${row.isActive ? 'Active' : 'Inactive'}</span>` }
   ];
 
   // Format account type for display
@@ -239,6 +366,12 @@
       return;
     }
 
+    // Resolve parent fields. When user selects '-- No Parent --', ensure parentId is null and parentName is ''
+    const normalizedParentId = formData.parentId ? String(formData.parentId) : null;
+    const resolvedParentName = normalizedParentId
+      ? (parentAccountOptions.find(o => String(o.value) === normalizedParentId)?.label || '')
+      : '';
+
     // Prepare data for saving - make a clean copy to remove any undefined values
     const dataToSave: Record<string, any> = {
       code: formData.code || '',
@@ -250,16 +383,12 @@
       glName: formData.glName || '',
       slCode: formData.slCode || '',
       slName: formData.slName || '',
-      parentId: formData.parentId || null,
+      parentId: normalizedParentId,
+      parentName: resolvedParentName,
       isActive: formData.isActive !== false,
       isSystem: formData.isSystem || false,
       updatedAt: new Date()
     };
-    
-    // Only include parentName if it exists, otherwise don't include it at all
-    if (formData.parentName) {
-      dataToSave.parentName = formData.parentName;
-    }
     
     if (!editingItem) {
       dataToSave.createdAt = new Date();

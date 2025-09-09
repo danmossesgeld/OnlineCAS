@@ -45,17 +45,27 @@
   
   // Get options from the Firestore options store
   let customerOptions: {label: string, value: string}[] = [];
-  let itemOptions: {label: string, value: string, description?: string, unitName?: string, unitId?: string, price?: number}[] = [];
-  let invoiceOptions: {label: string, value: string}[] = [];
+  let itemOptions: {label: string, value: string, raw?: any}[] = [];
+  let unitOptions: {label: string, value: string}[] = [];
+  let taxTypeOptions: {label: string, value: string, raw?: any}[] = [];
+  let discountOptions: {label: string, value: any}[] = [];
 
   // Initialize subscription to Firestore options
   createFirestoreOptionsStore('customers', 'name', 'id').subscribe(opts => customerOptions = opts);
-  createFirestoreOptionsStore('items', 'name', 'id').subscribe(opts => itemOptions = opts);
+  // include raw item data for autofill
+  createFirestoreOptionsStore('items', 'name', 'id', true).subscribe(opts => itemOptions = opts);
+  createFirestoreOptionsStore('units').subscribe(opts => unitOptions = opts);
+  createFirestoreOptionsStore('tax', 'name', 'id', true).subscribe(opts => {
+    taxTypeOptions = [{ label: 'N/A', value: '' }, ...opts];
+  });
+  createFirestoreOptionsStore('otherlist/discounts', 'name', 'id').subscribe(opts => {
+    discountOptions = [{ label: 'N/A', value: '' }, ...opts];
+  });
 
   // Form state
   let formData: any = {
     cmNo: '',
-    cmDate: new Date(),
+    cmDate: '',
     customer: '',
     customerName: '',
     reference: '',
@@ -68,6 +78,7 @@
     taxRate: 0,
     taxAmount: 0,
     totalAmount: 0,
+    withholdingTax: '',
     createdAt: new Date(),
     updatedAt: new Date()
   };
@@ -83,7 +94,12 @@
     try {
       // Generate a sequential CM number
       formData.cmNo = await generateNextDocumentId(DocumentType.CREDIT_MEMO);
-      formData.cmDate = new Date();
+      // Set date to YYYY-MM-DD for date input binding
+      formData.cmDate = new Date().toISOString().split('T')[0];
+      // Ensure at least one line item row exists for editing
+      if (!formData.items || formData.items.length === 0) {
+        addItem();
+      }
     } catch (error) {
       console.error('Error generating credit memo number:', error);
       // Fallback to date-based number if sequential generation fails
@@ -103,19 +119,21 @@
     { label: 'CM No', name: 'cmNo', type: 'text', required: true, disabled: mode === 'edit' },
     { label: 'CM Date', name: 'cmDate', type: 'date', required: true },
     { label: 'Customer', name: 'customer', type: 'select', options: customerOptions, required: true, onChange: handleCustomerChange },
-    { label: 'Invoice', name: 'invoiceId', type: 'select', options: customerInvoices, onChange: handleInvoiceChange, disabled: !formData.customer },
+    // Per requirements, remove invoice linking
     { label: 'Reference', name: 'reference', type: 'text' },
     { label: 'Memo', name: 'memo', type: 'textarea', rows: 3 }
   ];
   
   // Define columns for the line items table
-  const columns = [
-    { label: 'Item', key: 'itemId', type: 'select', options: itemOptions, width: '25%' },
-    { label: 'Description', key: 'description', type: 'text', width: '25%' },
-    { label: 'Quantity', key: 'quantity', type: 'number', width: '10%' },
-    { label: 'Unit', key: 'unitName', type: 'text', width: '10%', readonly: true },
-    { label: 'Unit Price', key: 'unitPrice', type: 'number', width: '15%' },
-    { label: 'Amount', key: 'amount', width: '15%', readonly: true }
+  $: columns = [
+    { label: 'Item', key: 'itemId', type: 'select', options: itemOptions, width: '20%' },
+    { label: 'Description', key: 'description', type: 'text', width: '20%' },
+    { label: 'Quantity', key: 'quantity', type: 'number', width: '8%' },
+    { label: 'Unit', key: 'unit', type: 'select', options: unitOptions, width: '10%' },
+    { label: 'Unit Price', key: 'unitPrice', type: 'number', width: '10%' },
+    { label: 'DSC %', key: 'discount', type: 'select', options: discountOptions, width: '8%' },
+    { label: 'Tax Type', key: 'taxType', type: 'select', options: taxTypeOptions, width: '12%' },
+    { label: 'Amount', key: 'amount', width: '12%' }
   ];
 
   // Load existing credit memo data for editing
@@ -126,52 +144,67 @@
         throw new Error('Credit Memo not found');
       }
       
-      // Create a properly typed credit memo object
-      interface CreditMemo {
-        id: string;
-        cmNo: string;
-        cmDate: Date | { seconds: number; nanoseconds: number };
-        customer: string;
-        customerName: string;
-        reference: string;
-        invoiceId: string;
-        invoiceNo: string;
-        status: string;
-        memo: string;
-        items: any[];
-        subtotal: number;
-        taxRate: number;
-        taxAmount: number;
-        totalAmount: number;
-        createdAt: Date | { seconds: number; nanoseconds: number };
-        updatedAt: Date | { seconds: number; nanoseconds: number };
-        [key: string]: any;
-      }
-      
-      // Type assertion
-      const typedData = data as unknown as CreditMemo;
-      
-      // Convert timestamps to Date objects
-      if (typedData.cmDate && 'seconds' in typedData.cmDate) {
-        typedData.cmDate = new Date(typedData.cmDate.seconds * 1000);
-      }
-      
       // Store original data for comparison
-      originalData = JSON.parse(JSON.stringify(typedData));
+      originalData = JSON.parse(JSON.stringify(data));
       
-      // Populate form data
+      // Type assertion to access the data properties
+      const creditMemoData = data as any;
+      
+      // Populate form data with proper date formatting
+      let formattedDate = '';
+      if (creditMemoData.cmDate) {
+        if (creditMemoData.cmDate && typeof creditMemoData.cmDate === 'object' && 'seconds' in creditMemoData.cmDate) {
+          formattedDate = new Date(creditMemoData.cmDate.seconds * 1000).toISOString().split('T')[0];
+        } else if (creditMemoData.cmDate instanceof Date) {
+          formattedDate = creditMemoData.cmDate.toISOString().split('T')[0];
+        } else {
+          formattedDate = String(creditMemoData.cmDate);
+        }
+      }
+      
+      // Ensure all required fields are present
       formData = {
-        ...typedData,
-        // Ensure items array exists
-        items: typedData.items || []
+        cmNo: creditMemoData.cmNo || '',
+        cmDate: formattedDate || '',
+        customer: creditMemoData.customer || '',
+        customerName: creditMemoData.customerName || '',
+        reference: creditMemoData.reference || '',
+        invoiceId: creditMemoData.invoiceId || '',
+        invoiceNo: creditMemoData.invoiceNo || '',
+        status: creditMemoData.status || 'Draft',
+        memo: creditMemoData.memo || '',
+        items: creditMemoData.items || [],
+        subtotal: creditMemoData.subtotal || 0,
+        taxRate: creditMemoData.taxRate || 0,
+        taxAmount: creditMemoData.taxAmount || 0,
+        totalAmount: creditMemoData.totalAmount || 0,
+        withholdingTax: creditMemoData.withholdingTax || '',
+        createdAt: creditMemoData.createdAt || new Date(),
+        updatedAt: creditMemoData.updatedAt || new Date(),
+        id: creditMemoData.id || ''
       };
+      
+
+
+      // Ensure at least one editable row when no items
+      if (!formData.items || formData.items.length === 0) {
+        addItem();
+      }
       
       // Load customer invoices if customer is selected
       if (formData.customer) {
         await loadCustomerInvoices(formData.customer);
       }
       
-      isEditing = true;
+      // If we have a customer ID but no customer name, try to resolve it from options
+      if (formData.customer && !formData.customerName && customerOptions.length > 0) {
+        const customerOption = customerOptions.find(c => c.value === formData.customer);
+        if (customerOption) {
+          formData.customerName = customerOption.label;
+    
+        }
+      }
+      
       isLoading = false;
     } catch (err) {
       error = (err as Error).message;
@@ -275,13 +308,17 @@
       {
         itemId: '',
         description: '',
-        quantity: 1,
-        unitName: '',
+        quantity: 0,
+        unit: '',
         unitPrice: 0,
+        discount: '',
+        taxType: '',
         amount: 0,
         maxQuantity: Infinity
       }
     ];
+    // Trigger reactivity
+    formData.items = [...formData.items];
   }
 
   // Remove an item row from the form
@@ -292,30 +329,59 @@
 
   // Handle item selection
   function handleItemChange(index: number, itemId: string) {
-    const selectedItem = itemOptions.find(item => item.value === itemId);
-    
-    if (selectedItem) {
-      formData.items[index].itemId = selectedItem.value;
-      formData.items[index].description = selectedItem.description || '';
-      formData.items[index].unitName = selectedItem.unitName || '';
-      formData.items[index].unitPrice = selectedItem.price || 0;
-      
-      // If not from an invoice, set maxQuantity to infinity
-      if (!formData.items[index].maxQuantity) {
-        formData.items[index].maxQuantity = Infinity;
-      }
-
-      calculateLineTotal(index);
-    }
+    const selected = itemOptions.find(item => item.value === itemId);
+    if (!selected) return;
+    const raw: any = (selected as any).raw || {};
+    const line = formData.items[index];
+    line.itemId = selected.value;
+    // Always update description from selected item
+    line.description = raw.description ?? '';
+    // Always update unit: prefer unit_id, fallback to unitId/unit
+    line.unit = raw.unit_id ?? raw.unitId ?? raw.unit ?? '';
+    // Always update price: prefer sales_price, fallback to price
+    const resolvedPrice = (typeof raw.sales_price === 'number' ? raw.sales_price : undefined) ?? (typeof raw.price === 'number' ? raw.price : undefined);
+    if (resolvedPrice !== undefined) line.unitPrice = resolvedPrice;
+    calculateLineTotal(index);
+    // Trigger table re-render
+    formData.items = [...formData.items];
   }
 
   // Update line amounts when quantity or unit price changes
+  function getDiscountPercentFromOptionId(id: any): number {
+    const list = discountOptions || [];
+    const opt = list.find((o: any) => String(o.value) === String(id));
+    if (!opt || opt.label === 'N/A') return 0;
+    const m = opt.label?.match(/(\d+(?:\.\d+)?)%?/);
+    return m ? parseFloat(m[1]) : 0;
+  }
+
+  // Tax helpers (mirror sales invoice)
+  function getTaxRateFromOptionId(taxTypeId: string | number): number {
+    const found = taxTypeOptions.find(opt => String(opt.value) === String(taxTypeId));
+    if (!found) return 0;
+    const raw: any = (found as any).raw;
+    if (raw && typeof raw.rate === 'number') return raw.rate;
+    const match = found.label?.match(/(\d+(?:\.\d+)?)%?/);
+    return match ? parseFloat(match[1]) / 100 : 0;
+  }
+
+  function getTaxCategoryFromOptionId(taxTypeId: string | number): 'vatable' | 'zero' | 'exempt' {
+    const rate = getTaxRateFromOptionId(taxTypeId);
+    if (rate > 0) return 'vatable';
+    const label = taxTypeOptions.find(opt => String(opt.value) === String(taxTypeId))?.label?.toLowerCase() || '';
+    if (label.includes('zero') || label.includes('0%')) return 'zero';
+    return 'exempt';
+  }
+
   function calculateLineTotal(index: number) {
     const item = formData.items[index];
-    if (item) {
-      item.amount = (item.quantity || 0) * (item.unitPrice || 0);
-      calculateTotals();
-    }
+    if (!item) return;
+    const dscPercent = getDiscountPercentFromOptionId(item.discount);
+    const discountedPrice = (item.unitPrice || 0) * (1 - dscPercent / 100);
+    item.amount = (item.quantity || 0) * discountedPrice;
+    calculateTotals();
+    // Ensure UI updates for amount cell and footer
+    formData.items = [...formData.items];
   }
 
   // Update item for TxnItemTable component
@@ -326,24 +392,59 @@
       // If item ID is updated, handle related field updates
       if (key === 'itemId') {
         handleItemChange(index, value);
-      } 
-      // If quantity or unitPrice changes, recalculate totals
-      else if (key === 'quantity' || key === 'unitPrice') {
+      } else if (key === 'quantity' || key === 'unitPrice' || key === 'discount' || key === 'taxType') {
         calculateLineTotal(index);
       }
+      // Trigger reactivity for table inputs
+      formData.items = [...formData.items];
     }
   }
 
   // Calculate subtotal, tax, and total
   function calculateTotals() {
-    // Calculate subtotal
+    // Keep compatibility; actual values are also computed reactively below
     formData.subtotal = formData.items.reduce((total: number, item: any) => total + (item.amount || 0), 0);
-    
-    // Calculate tax amount based on tax rate
-    formData.taxAmount = formData.subtotal * (formData.taxRate / 100);
-    
-    // Calculate total amount
-    formData.totalAmount = formData.subtotal + formData.taxAmount;
+    formData.taxAmount = 0;
+    formData.totalAmount = formData.subtotal;
+  }
+
+  // Reactive totals (mirror sales invoice computations)
+  $: grossAmount = formData.items.reduce((sum: number, i: any) => sum + ((i.quantity || 0) * (i.unitPrice || 0)), 0);
+  $: discount = formData.items.reduce((sum: number, i: any) => {
+    const base = (i.quantity || 0) * (i.unitPrice || 0);
+    const dscPercent = getDiscountPercentFromOptionId(i.discount);
+    return sum + base * (dscPercent / 100);
+  }, 0);
+  $: netSales = formData.items.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+  
+  // Correct VAT computation according to Philippine VAT rules
+  $: vatableAmount = formData.items.reduce((sum: number, i: any) => sum + (getTaxCategoryFromOptionId(i.taxType) === 'vatable' ? (i.amount || 0) : 0), 0);
+  $: zeroRated = formData.items.reduce((sum: number, i: any) => sum + (getTaxCategoryFromOptionId(i.taxType) === 'zero' ? (i.amount || 0) : 0), 0);
+  $: vatExempt = formData.items.reduce((sum: number, i: any) => sum + (getTaxCategoryFromOptionId(i.taxType) === 'exempt' ? (i.amount || 0) : 0), 0);
+  
+  // VAT-exclusive sales (amount before VAT)
+  $: vatableSales = vatableAmount / 1.12;
+  // VAT amount (12% of VAT-exclusive amount)
+  $: vat = vatableSales * 0.12;
+  
+  $: lessWithholding = formData.withholdingTax ? (vatableSales * (parseFloat(formData.withholdingTax) / 100)) : 0;
+  // Total due is net sales minus withholding tax (VAT already included in net sales)
+  $: totalDue = netSales - lessWithholding;
+  
+
+
+  // Keep legacy fields in sync for save
+  $: formData.subtotal = netSales;
+  $: formData.taxAmount = vat;
+  $: formData.totalAmount = totalDue;
+  
+  // Reactive statement to resolve customer name when options load
+  $: if (formData.customer && !formData.customerName && customerOptions.length > 0) {
+    const customerOption = customerOptions.find(c => c.value === formData.customer);
+    if (customerOption) {
+      formData.customerName = customerOption.label;
+
+    }
   }
 
   // Save the credit memo
@@ -372,11 +473,17 @@
       // Calculate totals one last time
       calculateTotals();
       
+      // Force Posted status when saving via primary button
+      const desiredStatus = 'Posted';
+      formData.status = desiredStatus;
       // Prepare data for save
       const creditMemoData = {
         ...formData,
+        status: desiredStatus,
         updatedAt: new Date()
       };
+      
+
       
       // Create or update
       let savedDocId;
@@ -393,8 +500,8 @@
         savedDocId = docRef.id;
       }
       
-      // Create journal entry if the status is being set to Posted
-      if (formData.status === 'Posted') {
+      // Create journal entry when posted
+      if (creditMemoData.status === 'Posted') {
         await createCreditMemoJournalEntry({
           id: savedDocId,
           ...creditMemoData
@@ -404,7 +511,7 @@
         await updateDocInCollection(
           'transactions/customerCenter/creditMemos',
           savedDocId,
-          { status: 'Posted' }
+          { status: desiredStatus }
         );
       }
       
@@ -478,7 +585,7 @@
     />
     
     <!-- Form Footer with transaction summary and buttons -->
-    <FormFooter 
+      <FormFooter 
       primaryLabel={isViewMode ? 'Back to List' : (isSaving ? 'Saving...' : (isEditMode ? 'Update Credit Memo' : 'Create Credit Memo'))}
       secondaryLabel="Cancel"
       onPrimaryClick={isViewMode ? () => goto('/customerCenter/creditMemo/list') : saveCreditMemo}
@@ -488,10 +595,21 @@
       leftSideContent={true}
       summaryMode="transaction"
       lineItems={formData.items}
-      grossAmount={formData.subtotal}
-      vatRate={formData.taxRate / 100}
-      vat={formData.taxAmount}
-      totalDue={formData.totalAmount}
+        grossAmount={grossAmount}
+        discount={discount}
+        netSales={netSales}
+        vat={vat}
+        vatableSales={vatableSales}
+        zeroRated={zeroRated}
+        vatExempt={vatExempt}
+        lessWithholding={lessWithholding}
+        totalDue={totalDue}
+        bind:withholdingTax={formData.withholdingTax}
+        withholdingTaxOptions={[{label:'Select Withholding Tax', value:''},{label:'1%', value:'1'},{label:'2%', value:'2'}]}
+        withholdingLabel={`Less: Withholding Tax${formData.withholdingTax ? ` (${formData.withholdingTax}%)` : ''}`}
+        totalLabel="Total Amount"
     />
+    
+
   {/if}
 </FormLayout>

@@ -1,4 +1,4 @@
-import { addDocToCollection, getDocFromCollection } from './firestoreCrud';
+import { addDocToCollection, updateDocInCollection, getDocFromCollection } from './firestoreCrud';
 
 /**
  * Generates a unique reference number for journal entries
@@ -55,7 +55,7 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
     };
     
     // Create journal entry lines
-    const lines = [];
+    const lines: any[] = [];
     
     // Main entry - Debit A/R or Cash
     lines.push({
@@ -424,6 +424,9 @@ export async function createReceiptJournalEntry(receipt: any): Promise<string | 
         break;
     }
     
+    // Calculate total transaction amount (cash + applied credits)
+    const totalTransactionAmount = receipt.amount + (receipt.totalAppliedCredit || 0);
+    
     // Create the journal entry header
     const journalEntryData = {
       journalDate: receipt.receiptDate,
@@ -432,8 +435,8 @@ export async function createReceiptJournalEntry(receipt: any): Promise<string | 
       memo: receipt.memo || '',
       sourceType: 'receipt',
       sourceId: receipt.id,
-      totalDebit: receipt.amount,
-      totalCredit: receipt.amount,
+      totalDebit: totalTransactionAmount,
+      totalCredit: totalTransactionAmount,
       isPosted: true,
       status: 'posted',
       createdAt: new Date(),
@@ -442,21 +445,81 @@ export async function createReceiptJournalEntry(receipt: any): Promise<string | 
     
     // Create journal entry lines
     const lines = [];
+    let lineCounter = 1;
     
-    // Main entry - Debit Cash/Bank
-    lines.push({
-      lineNo: 1,
-      accountId: cashAccountId,
-      accountName: cashAccountName,
-      nameType: 'customer',
-      nameId: receipt.customer,
-      nameName: receipt.customerName,
-      lineDescription: `Receipt #${receipt.receiptNo}`,
-      debit: receipt.amount,
-      credit: 0
-    });
+    // Main entry - Debit Cash/Bank (only if there's a cash payment)
+    if (receipt.amount > 0) {
+      lines.push({
+        lineNo: lineCounter++,
+        accountId: cashAccountId,
+        accountName: cashAccountName,
+        nameType: 'customer',
+        nameId: receipt.customer,
+        nameName: receipt.customerName,
+        lineDescription: `Receipt #${receipt.receiptNo} - Cash Payment`,
+        debit: receipt.amount,
+        credit: 0
+      });
+    }
     
-    let lineCounter = 2;
+    // Handle applied credits - these should be credited to their respective sources
+    if (receipt.appliedCredits && Array.isArray(receipt.appliedCredits)) {
+      receipt.appliedCredits.forEach((credit: any) => {
+        if (credit.type === 'credit_memo') {
+          // Debit Accounts Receivable (reduce customer debt)
+          lines.push({
+            lineNo: lineCounter++,
+            accountId: 'accounts-receivable',
+            accountName: 'Accounts Receivable',
+            nameType: 'customer',
+            nameId: receipt.customer,
+            nameName: receipt.customerName,
+            lineDescription: `Applied Credit Memo ${credit.reference}`,
+            debit: credit.appliedAmount,
+            credit: 0
+          });
+          
+          // Credit the Credit Memo account (reduce the liability)
+          lines.push({
+            lineNo: lineCounter++,
+            accountId: 'customer-credit-balance',
+            accountName: 'Customer Credit Balance',
+            nameType: 'customer',
+            nameId: receipt.customer,
+            nameName: receipt.customerName,
+            lineDescription: `Applied Credit Memo ${credit.reference}`,
+            debit: 0,
+            credit: credit.appliedAmount
+          });
+        } else if (credit.type === 'advance_payment') {
+          // Debit Accounts Receivable (reduce customer debt)
+          lines.push({
+            lineNo: lineCounter++,
+            accountId: 'accounts-receivable',
+            accountName: 'Accounts Receivable',
+            nameType: 'customer',
+            nameId: receipt.customer,
+            nameName: receipt.customerName,
+            lineDescription: `Applied Advance Payment ${credit.reference}`,
+            debit: credit.appliedAmount,
+            credit: 0
+          });
+          
+          // Credit the Customer Deposits account (reduce the liability)
+          lines.push({
+            lineNo: lineCounter++,
+            accountId: 'customer-deposits',
+            accountName: 'Customer Deposits',
+            nameType: 'customer',
+            nameId: receipt.customer,
+            nameName: receipt.customerName,
+            lineDescription: `Applied Advance Payment ${credit.reference}`,
+            debit: 0,
+            credit: credit.appliedAmount
+          });
+        }
+      });
+    }
     
     // Add credit entries for each invoice payment
     if (receipt.invoicePayments && Array.isArray(receipt.invoicePayments)) {
@@ -474,7 +537,7 @@ export async function createReceiptJournalEntry(receipt: any): Promise<string | 
         });
       });
     } else {
-      // If no invoice allocations, credit A/R with the full amount
+      // If no invoice allocations, credit A/R with the full transaction amount
       lines.push({
         lineNo: lineCounter++,
         accountId: 'accounts-receivable',
@@ -484,7 +547,7 @@ export async function createReceiptJournalEntry(receipt: any): Promise<string | 
         nameName: receipt.customerName,
         lineDescription: `Receipt #${receipt.receiptNo}`,
         debit: 0,
-        credit: receipt.amount
+        credit: totalTransactionAmount
       });
     }
     
@@ -671,36 +734,77 @@ export async function createCreditMemoJournalEntry(creditMemo: any): Promise<str
       totalCredit: creditMemo.totalAmount,
       isPosted: true,
       createdAt: new Date(),
-      updatedAt: new Date(),
-      lines: []
+      updatedAt: new Date()
     };
 
     // Initialize lines array for journal entry
     const lines = [];
     
-    // Line 1: Debit Sales Revenue (Income account) - reverses the original revenue recognition
-    // We need to get the account ID for Sales Revenue
-    const salesAccountId = 'sales-revenue'; // This should be configured or retrieved
-    const salesAccountName = 'Sales Revenue'; // This should be configured or retrieved
-    
+    // Compute core amounts using saved aggregates with safe fallbacks
+    const netSales = typeof creditMemo.subtotal === 'number'
+      ? creditMemo.subtotal
+      : Array.isArray(creditMemo.items)
+        ? creditMemo.items.reduce((sum: number, i: any) => sum + (i.amount || (i.quantity || 0) * (i.unitPrice || 0)), 0)
+        : 0;
+    const vat = typeof creditMemo.taxAmount === 'number' ? creditMemo.taxAmount : 0;
+    const withholdingRate = creditMemo.withholdingTax ? parseFloat(String(creditMemo.withholdingTax)) / 100 : 0;
+    const lessWithholding = +(netSales * (withholdingRate || 0)).toFixed(2);
+    const totalDue = +(netSales + vat - lessWithholding).toFixed(2);
+
+    // Accounts (could be settings-driven in the future)
+    const salesAccountId = 'sales-revenue';
+    const salesAccountName = 'Sales Revenue';
+    const vatPayableAccountId = 'vat-payable';
+    const vatPayableAccountName = 'VAT Payable';
+    const arAccountId = 'accounts-receivable';
+    const arAccountName = 'Accounts Receivable';
+    const whtReceivableAccountId = 'withholding-tax-receivable';
+    const whtReceivableAccountName = 'Withholding Tax Receivable';
+
+    let lineCounter = 1;
+
+    // Reverse revenue (Debit Sales Revenue)
+    if (netSales > 0) {
+      lines.push({
+        lineNo: lineCounter++,
+        accountId: salesAccountId,
+        accountName: salesAccountName,
+        nameType: 'customer',
+        nameId: creditMemo.customer,
+        nameName: creditMemo.customerName,
+        lineDescription: `Sales reversal - CM #${creditMemo.cmNo}`,
+        debit: netSales,
+        credit: 0
+      });
+    }
+
+    // Reverse VAT payable (Debit VAT Payable)
+    if (vat > 0) {
+      lines.push({
+        lineNo: lineCounter++,
+        accountId: vatPayableAccountId,
+        accountName: vatPayableAccountName,
+        lineDescription: `VAT reversal - CM #${creditMemo.cmNo}`,
+        debit: vat,
+        credit: 0
+      });
+    }
+
+    // Reverse Withholding receivable if any (Credit)
+    if (lessWithholding > 0) {
+      lines.push({
+        lineNo: lineCounter++,
+        accountId: whtReceivableAccountId,
+        accountName: whtReceivableAccountName,
+        lineDescription: `Withholding reversal - CM #${creditMemo.cmNo}`,
+        debit: 0,
+        credit: lessWithholding
+      });
+    }
+
+    // Credit Accounts Receivable by total due
     lines.push({
-      lineNo: 1,
-      accountId: salesAccountId,
-      accountName: salesAccountName,
-      nameType: 'customer',
-      nameId: creditMemo.customer,
-      nameName: creditMemo.customerName,
-      lineDescription: `Credit Memo #${creditMemo.cmNo}`,
-      debit: creditMemo.totalAmount,
-      credit: 0
-    });
-    
-    // Line 2: Credit Accounts Receivable (Asset account) - reduces the amount owed by customer
-    const arAccountId = 'accounts-receivable'; // This should be configured or retrieved
-    const arAccountName = 'Accounts Receivable'; // This should be configured or retrieved
-    
-    lines.push({
-      lineNo: 2,
+      lineNo: lineCounter++,
       accountId: arAccountId,
       accountName: arAccountName,
       nameType: 'customer',
@@ -708,7 +812,7 @@ export async function createCreditMemoJournalEntry(creditMemo: any): Promise<str
       nameName: creditMemo.customerName,
       lineDescription: `Credit Memo #${creditMemo.cmNo}`,
       debit: 0,
-      credit: creditMemo.totalAmount
+      credit: totalDue
     });
     
     // Handle items with individual entries if needed for detailed reporting
@@ -755,20 +859,17 @@ export async function createCreditMemoJournalEntry(creditMemo: any): Promise<str
       });
     }
     
-    // Add lines to journal entry data
-    journalEntryData.lines = lines;
-    
     // Save the journal entry to Firestore
-    const journalEntryId = await addDocToCollection('accounting/journalEntries', journalEntryData);
+    const docRef = await addDocToCollection('accounting', 'journalEntries', { ...journalEntryData, lines });
+    const journalEntryId = docRef.id;
     
     // Update the credit memo with the journal entry ID reference
-    if (journalEntryId) {
-      await addDocToCollection('customerCenter/creditMemos', { 
-        ...creditMemo,
+    if (journalEntryId && creditMemo.id) {
+      await updateDocInCollection('customerCenter/creditMemos', String(creditMemo.id), {
         journalEntryId,
         status: 'Posted',
         updatedAt: new Date()
-      }, creditMemo.id);
+      });
     }
     
     return journalEntryId;
@@ -797,8 +898,7 @@ export async function createReceivingReportJournalEntry(receivingReport: any): P
       totalCredit: receivingReport.totalAmount,
       isPosted: true,
       createdAt: new Date(),
-      updatedAt: new Date(),
-      lines: []
+      updatedAt: new Date()
     };
 
     // Initialize lines array for journal entry
@@ -882,20 +982,17 @@ export async function createReceivingReportJournalEntry(receivingReport: any): P
       });
     }
     
-    // Add lines to journal entry data
-    journalEntryData.lines = lines;
-    
     // Save the journal entry to Firestore
-    const journalEntryId = await addDocToCollection('accounting/journalEntries', journalEntryData);
+    const docRef = await addDocToCollection('accounting', 'journalEntries', { ...journalEntryData, lines });
+    const journalEntryId = docRef.id;
     
     // Update the receiving report with the journal entry ID reference
-    if (journalEntryId) {
-      await addDocToCollection('vendorCenter/receivingReports', { 
-        ...receivingReport,
+    if (journalEntryId && receivingReport.id) {
+      await updateDocInCollection('vendorCenter/receivingReports', String(receivingReport.id), {
         journalEntryId,
         status: 'Posted',
         updatedAt: new Date()
-      }, receivingReport.id);
+      });
     }
     
     return journalEntryId;

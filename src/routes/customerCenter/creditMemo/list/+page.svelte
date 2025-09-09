@@ -9,7 +9,6 @@
     { label: 'Date', key: 'cmDate', type: 'date' },
     { label: 'Customer', key: 'customerName' },
     { label: 'Reference', key: 'reference' },
-    { label: 'Invoice No.', key: 'invoiceNo' },
     { label: 'Amount', key: 'totalAmount', type: 'currency' },
     { label: 'Status', key: 'status' }
   ];
