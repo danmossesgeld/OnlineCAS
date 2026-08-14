@@ -109,25 +109,28 @@
 </script>
 
 <div class="overflow-x-auto w-full">
-  <table class="w-full text-sm border-collapse bg-white rounded-lg shadow-sm">
+  <table class="w-full text-sm border-collapse">
     <thead>
       <tr>
         {#each columns as col}
-          <th class="px-4 py-3 font-semibold text-gray-700 bg-gray-50 border-b-2 border-gray-200 text-left" style={col.width ? `width:${col.width}` : ''}>{col.label}</th>
+          <th
+            class="px-3 py-2.5 font-medium text-left text-xs uppercase tracking-wide"
+            style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200); {col.width ? `width:${col.width}` : ''}"
+          >{col.label}</th>
         {/each}
-        <th class="px-4 py-3 bg-gray-50 border-b-2 border-gray-200 w-20"></th>
+        <th class="px-3 py-2.5 w-20" style="border-bottom: 1px solid var(--color-neutral-200);"></th>
       </tr>
     </thead>
     <tbody>
       {#each rows as row, idx}
-        <tr class="{idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50 transition-colors duration-150">
+        <tr class="transition-colors duration-100 hover:[background:var(--color-primary-50)]">
           {#each columns as col}
-            <td class="px-4 py-3 align-middle border-b border-gray-100">
+            <td class="px-3 py-2.5 align-middle" style="border-bottom: 1px solid var(--color-neutral-100);">
               {#if col.render}
                 {@html col.render(row)}
               {:else if col.type === 'date' || col.key.toLowerCase().includes('date')}
                 {#if row[col.key]}
-                  <span class="text-gray-600">
+                  <span style="color: var(--color-neutral-600);">
                     {#if row[col.key] instanceof Date}
                       {row[col.key].toLocaleDateString()}
                     {:else if row[col.key] && row[col.key].seconds}
@@ -141,22 +144,26 @@
                     {/if}
                   </span>
                 {:else}
-                  <span class="text-gray-600">-</span>
+                  <span style="color: var(--color-neutral-400);">-</span>
                 {/if}
               {:else if typeof row[col.key] === 'number' && (col.key === 'amount' || col.key === 'totalDue' || col.key === 'grossAmount' || col.key === 'netSales')}
-                <span class="font-medium text-gray-900">{row[col.key].toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
+                <span class="font-medium" style="color: var(--color-neutral-800);">{row[col.key].toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
               {:else if col.key === 'status'}
-                <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full" class:bg-green-100={row[col.key] === 'Posted'} class:text-green-800={row[col.key] === 'Posted'} class:bg-yellow-100={row[col.key] === 'Pending'} class:text-yellow-800={row[col.key] === 'Pending'} class:bg-gray-100={row[col.key] === 'Draft'} class:text-gray-800={row[col.key] === 'Draft'} class:bg-red-100={row[col.key] === 'Overdue'} class:text-red-800={row[col.key] === 'Overdue'}>
+                {@const statusColor = row[col.key] === 'Posted' ? '--color-success-600' : row[col.key] === 'Pending' ? '--color-warning-600' : row[col.key] === 'Overdue' ? '--color-error-600' : '--color-neutral-500'}
+                <span
+                  class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full"
+                  style={`color: var(${statusColor}); background: color-mix(in srgb, var(${statusColor}) 14%, transparent);`}
+                >
                   {row[col.key]}
                 </span>
               {:else if col.key === 'remarks' && !row[col.key] && row['memo']}
-                <span class="text-gray-700">{row['memo']}</span>
+                <span style="color: var(--color-neutral-700);">{row['memo']}</span>
               {:else}
-                <span class="text-gray-700">{row[col.key] || '-'}</span>
+                <span style="color: var(--color-neutral-700);">{row[col.key] || '-'}</span>
               {/if}
             </td>
           {/each}
-          <td class="px-4 py-3 text-center border-b border-gray-100">
+          <td class="px-3 py-2.5 text-center" style="border-bottom: 1px solid var(--color-neutral-100);">
             <div class="flex items-center justify-center space-x-1">
               <slot name="actions" {row} />
             </div>

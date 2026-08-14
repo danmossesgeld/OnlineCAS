@@ -90,8 +90,7 @@
     }
   }
 </script>
-<div class="bg-white rounded-2xl shadow-xl p-8">
-  <MasterListContainer
+<MasterListContainer
     {rootCollection}
     {parentCollection}
     {subCollectionName}
@@ -120,5 +119,4 @@
       onSave={handleSave}
       onCancel={handleCancel}
     />
-  {/if}
-</div> 
+  {/if} 

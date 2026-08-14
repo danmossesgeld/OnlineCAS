@@ -4,15 +4,12 @@
   import { page } from '$app/stores';
   import FormLayout from '$lib/components/FormLayout.svelte';
   import FormSection from '$lib/components/FormSection.svelte';
-  import { 
-    addDocToCollection, 
-    getDocFromCollection, 
-    updateDocInCollection,
-    queryCollectionDocs,
-    type FilterCondition
+  import {
+    addDocToCollection,
+    getDocFromCollection,
+    updateDocInCollection
   } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
-  import { formatCurrency, formatDate, formatDateForInput } from '$lib/utils/formatters';
   import { createCreditMemoJournalEntry } from '$lib/utils/accountingService';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { createFormModeStore } from '$lib/stores/formModeStore';
@@ -30,11 +27,11 @@
   $: isEditMode = mode === 'edit';
   $: isCreateMode = mode === 'create';
   $: isEditing = mode === 'edit';
-  $: pageTitle = {
-    'create': 'Create Credit Memo',
-    'edit': 'Edit Credit Memo',
-    'view': 'View Credit Memo'
-  }[mode];
+  // Show the actual credit memo number once known, instead of a generic "Edit/View Credit Memo"
+  // label — falls back to a mode label for a brand-new, not-yet-saved credit memo.
+  $: pageTitle = isCreateMode
+    ? 'New Credit Memo'
+    : (formData.cmNo ? formData.cmNo : (mode === 'view' ? 'View Credit Memo' : 'Edit Credit Memo'));
   
   // Load document when the ID changes in edit or view mode
   $: if (docId && (isEditMode || isViewMode)) {
@@ -69,8 +66,6 @@
     customer: '',
     customerName: '',
     reference: '',
-    invoiceId: '',
-    invoiceNo: '',
     status: 'Draft',
     memo: '',
     items: [],
@@ -87,7 +82,6 @@
   let isSaving = false;
   let error = '';
   let originalData = null;
-  let customerInvoices: any[] = [];
 
   // Initialize form with unique credit memo number
   async function initializeForm() {
@@ -120,8 +114,7 @@
     { label: 'CM Date', name: 'cmDate', type: 'date', required: true },
     { label: 'Customer', name: 'customer', type: 'select', options: customerOptions, required: true, onChange: handleCustomerChange },
     // Per requirements, remove invoice linking
-    { label: 'Reference', name: 'reference', type: 'text' },
-    { label: 'Memo', name: 'memo', type: 'textarea', rows: 3 }
+    { label: 'Reference', name: 'reference', type: 'text' }
   ];
   
   // Define columns for the line items table
@@ -169,8 +162,6 @@
         customer: creditMemoData.customer || '',
         customerName: creditMemoData.customerName || '',
         reference: creditMemoData.reference || '',
-        invoiceId: creditMemoData.invoiceId || '',
-        invoiceNo: creditMemoData.invoiceNo || '',
         status: creditMemoData.status || 'Draft',
         memo: creditMemoData.memo || '',
         items: creditMemoData.items || [],
@@ -189,11 +180,6 @@
       // Ensure at least one editable row when no items
       if (!formData.items || formData.items.length === 0) {
         addItem();
-      }
-      
-      // Load customer invoices if customer is selected
-      if (formData.customer) {
-        await loadCustomerInvoices(formData.customer);
       }
       
       // If we have a customer ID but no customer name, try to resolve it from options
@@ -220,84 +206,9 @@
     if (selectedCustomer) {
       formData.customer = selectedCustomer.value;
       formData.customerName = selectedCustomer.label;
-      
-      // Reset invoice selection when customer changes
-      formData.invoiceId = '';
-      formData.invoiceNo = '';
-      
-      // Load customer's invoices
-      await loadCustomerInvoices(selectedCustomer.value);
     } else {
       formData.customer = '';
       formData.customerName = '';
-      customerInvoices = [];
-    }
-  }
-
-  // Load customer's invoices for selection
-  async function loadCustomerInvoices(customerId: string) {
-    try {
-      // Query for invoices belonging to this customer using queryCollectionDocs
-      const filters: FilterCondition[] = [
-        { field: 'customer', operator: '==', value: customerId },
-        { field: 'status', operator: '==', value: 'Posted' }
-      ];
-      
-      const invoices = await queryCollectionDocs('transactions/customerCenter/salesInvoices', filters);
-
-      if (invoices && Array.isArray(invoices)) {
-        // Type assertion to ensure TypeScript knows the structure of the invoice data
-        type Invoice = {
-          id: string;
-          invoiceNo: string;
-          invoiceDate: { seconds: number; nanoseconds: number } | Date;
-          totalDue: number;
-          [key: string]: any;
-        };
-        
-        customerInvoices = invoices.map((invoice: any) => {
-          const typedInvoice = invoice as unknown as Invoice;
-          return {
-            value: typedInvoice.id,
-            label: `${typedInvoice.invoiceNo} - ${formatDate(typedInvoice.invoiceDate)} (${formatCurrency(typedInvoice.totalDue)})`,
-            ...typedInvoice
-          };
-        });
-      } else {
-        customerInvoices = [];
-      }
-    } catch (err) {
-      console.error('Error loading customer invoices:', err);
-      customerInvoices = [];
-    }
-  }
-
-  // Handle invoice selection
-  function handleInvoiceChange(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selectedInvoice = customerInvoices.find(inv => inv.value === select.value);
-    
-    if (selectedInvoice) {
-      formData.invoiceId = selectedInvoice.value;
-      formData.invoiceNo = selectedInvoice.invoiceNo;
-      
-      // Pre-populate items from the invoice
-      if (selectedInvoice.items && Array.isArray(selectedInvoice.items) && formData.items.length === 0) {
-        formData.items = selectedInvoice.items.map((item: any) => ({
-          ...item,
-          quantity: 0, // Start with zero quantity
-          amount: 0,   // Reset amount
-          maxQuantity: item.quantity // Set max quantity to original quantity
-        }));
-      }
-      
-      // Set tax rate from invoice
-      formData.taxRate = selectedInvoice.taxRate || 0;
-      
-      calculateTotals();
-    } else {
-      formData.invoiceId = '';
-      formData.invoiceNo = '';
     }
   }
 
@@ -537,8 +448,6 @@
       fields.forEach(field => {
         if (field.name === 'cmNo') {
           field.disabled = isEditMode || isViewMode;
-        } else if (field.name === 'invoiceId') {
-          field.disabled = !formData.customer || isViewMode;
         } else {
           field.disabled = isViewMode;
         }
@@ -557,9 +466,24 @@
 </script>
 
 <FormLayout title={pageTitle} backPath="/customerCenter/creditMemo/list">
+  <svelte:fragment slot="header-actions">
+    <div class="w-full sm:w-64">
+      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+      <textarea
+        id="field-memo"
+        rows="2"
+        class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
+        style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        placeholder="Add a memo"
+        bind:value={formData.memo}
+        disabled={isViewMode}
+      ></textarea>
+    </div>
+  </svelte:fragment>
+
   {#if isLoading}
     <div class="flex justify-center items-center h-64">
-      <p class="text-gray-600">Loading...</p>
+      <p style="color: var(--color-neutral-600);">Loading...</p>
     </div>
   {:else}
     <!-- Document header fields section -->
@@ -576,6 +500,7 @@
       actionIcon="material-symbols:add"
       onAction={addItem}
       isItemTable={true}
+      grow={true}
       columns={columns}
       items={formData.items}
       onRemove={!isViewMode ? removeItem : null}

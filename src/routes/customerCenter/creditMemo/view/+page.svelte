@@ -91,7 +91,7 @@
       if (!creditMemoData) {
         throw new Error('Credit Memo not found');
       }
-      
+
       // Load associated journal entries if they exist
       if (creditMemoData.journalEntryId) {
         const journalEntry = await getDocFromCollection('accounting/journalEntries', creditMemoData.journalEntryId);
@@ -99,7 +99,7 @@
           accountingEntries = (journalEntry as any).lines;
         }
       }
-      
+
       loading = false;
     } catch (e) {
       error = (e as Error).message;
@@ -116,27 +116,25 @@
   }
 </script>
 
-<div class="container mx-auto py-6 px-4">
-  <div class="mb-6 flex justify-between items-center">
-    <h1 class="text-2xl font-semibold text-gray-800">Credit Memo View</h1>
-    <div class="flex space-x-3">
-      <button 
-        class="px-4 py-2 bg-gray-100 text-gray-700 rounded shadow-sm hover:bg-gray-200 transition-colors flex items-center space-x-2"
-        on:click={handleBack}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-        </svg>
-        <span>Back to List</span>
-      </button>
+<div class="flex flex-col h-full w-full">
+  <div class="flex items-center mb-4 gap-3">
+    <button
+      on:click={handleBack}
+      class="flex items-center justify-center w-9 h-9 rounded-lg border transition-colors focus:outline-none focus:ring-2"
+      style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-600);"
+      aria-label="Back"
+    >
+      <iconify-icon icon="material-symbols:arrow-back-rounded" width="20" height="20"></iconify-icon>
+    </button>
+    <h1 class="text-xl md:text-2xl font-semibold" style="color: var(--color-neutral-800);">Credit Memo View</h1>
+    <div class="ml-auto flex items-center gap-3">
       {#if creditMemoData && creditMemoData.status !== 'Posted'}
-        <button 
-          class="px-4 py-2 bg-blue-600 text-white rounded shadow-sm hover:bg-blue-700 transition-colors flex items-center space-x-2"
+        <button
+          class="px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-white transition-colors"
+          style="background: var(--color-primary-600);"
           on:click={handleEdit}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-          </svg>
+          <iconify-icon icon="material-symbols:edit-outline-rounded" width="18" height="18"></iconify-icon>
           <span>Edit</span>
         </button>
       {/if}
@@ -144,182 +142,180 @@
   </div>
 
   {#if loading}
-    <div class="text-center py-10">
-      <p class="text-gray-600">Loading credit memo data...</p>
+    <div class="text-center py-10 text-sm" style="color: var(--color-neutral-500);">
+      Loading credit memo data...
     </div>
   {:else if error}
-    <div class="bg-red-50 border border-red-200 p-4 rounded-md">
-      <p class="text-red-600">{error}</p>
-      <button 
-        class="mt-2 px-4 py-2 bg-gray-100 text-gray-700 rounded shadow-sm hover:bg-gray-200 transition-colors"
+    <div class="rounded-lg border p-4" style="background: color-mix(in srgb, var(--color-error-600) 8%, transparent); border-color: var(--color-error-600);">
+      <p class="text-sm" style="color: var(--color-error-600);">{error}</p>
+      <button
+        class="mt-3 px-3.5 py-2 rounded-lg border text-sm font-medium transition-colors"
+        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
         on:click={handleBack}
       >
         Return to List
       </button>
     </div>
   {:else if creditMemoData}
-    <div class="bg-white shadow-md rounded-lg overflow-hidden mb-6">
-      <div class="p-6">
-        <div class="grid grid-cols-2 gap-6">
-          <div>
-            <h2 class="text-lg font-semibold text-gray-700 mb-4">Credit Memo Information</h2>
-            <div class="space-y-3">
-              <div class="flex justify-between">
-                <span class="text-gray-600">CM No.:</span>
-                <span class="font-medium text-gray-800">{creditMemoData.cmNo || '-'}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">Date:</span>
-                <span class="font-medium text-gray-800">{formatDate(creditMemoData.cmDate)}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">Customer:</span>
-                <span class="font-medium text-gray-800">{creditMemoData.customerName || '-'}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">Status:</span>
-                <span class="font-medium text-gray-800">{creditMemoData.status || 'Draft'}</span>
-              </div>
+    <div class="rounded-lg border p-4 sm:p-5" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200);">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div>
+          <h2 class="text-base font-semibold mb-3" style="color: var(--color-neutral-800);">Credit Memo Information</h2>
+          <div class="space-y-2.5 text-sm">
+            <div class="flex justify-between">
+              <span style="color: var(--color-neutral-500);">CM No.:</span>
+              <span class="font-medium" style="color: var(--color-neutral-800);">{creditMemoData.cmNo || '-'}</span>
+            </div>
+            <div class="flex justify-between">
+              <span style="color: var(--color-neutral-500);">Date:</span>
+              <span class="font-medium" style="color: var(--color-neutral-800);">{formatDate(creditMemoData.cmDate)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span style="color: var(--color-neutral-500);">Customer:</span>
+              <span class="font-medium" style="color: var(--color-neutral-800);">{creditMemoData.customerName || '-'}</span>
+            </div>
+            <div class="flex justify-between">
+              <span style="color: var(--color-neutral-500);">Status:</span>
+              <span class="font-medium" style="color: var(--color-neutral-800);">{creditMemoData.status || 'Draft'}</span>
             </div>
           </div>
-          <div>
-            <h2 class="text-lg font-semibold text-gray-700 mb-4">Additional Information</h2>
-            <div class="space-y-3">
-              <div class="flex justify-between">
-                <span class="text-gray-600">Reference:</span>
-                <span class="font-medium text-gray-800">{creditMemoData.reference || '-'}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">Last Updated:</span>
-                <span class="font-medium text-gray-800">{formatDate(creditMemoData.updatedAt || creditMemoData.createdAt)}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">Memo:</span>
-                <span class="font-medium text-gray-800">{creditMemoData.memo || '-'}</span>
-              </div>
+        </div>
+        <div>
+          <h2 class="text-base font-semibold mb-3" style="color: var(--color-neutral-800);">Additional Information</h2>
+          <div class="space-y-2.5 text-sm">
+            <div class="flex justify-between">
+              <span style="color: var(--color-neutral-500);">Reference:</span>
+              <span class="font-medium" style="color: var(--color-neutral-800);">{creditMemoData.reference || '-'}</span>
+            </div>
+            <div class="flex justify-between">
+              <span style="color: var(--color-neutral-500);">Last Updated:</span>
+              <span class="font-medium" style="color: var(--color-neutral-800);">{formatDate(creditMemoData.updatedAt || creditMemoData.createdAt)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span style="color: var(--color-neutral-500);">Memo:</span>
+              <span class="font-medium" style="color: var(--color-neutral-800);">{creditMemoData.memo || '-'}</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Items Section -->
-    <div class="bg-white shadow-md rounded-lg overflow-hidden mb-6">
-      <div class="px-6 py-4 border-b border-gray-200">
-        <h2 class="text-lg font-semibold text-gray-700">Credit Memo Items</h2>
-      </div>
-      <div class="overflow-x-auto">
-        {#if creditMemoData.items && creditMemoData.items.length > 0}
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Type</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              {#each creditMemoData.items as item}
-                <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {getItemLabel(item)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{item.description || '-'}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
-                    {item.quantity}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {getUnitLabel(item)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">{formatCurrency(item.unitPrice)}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {item.taxTypeName || getTaxTypeLabel(item.taxType)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">{formatCurrency(item.quantity * item.unitPrice)}</td>
-                </tr>
-              {/each}
-            </tbody>
-            <tfoot class="bg-gray-50">
-              <tr>
-                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="6">Subtotal:</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">{formatCurrency(creditMemoData.subtotal || 0)}</td>
-              </tr>
-              <tr>
-                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="6">
-                  {creditMemoData.taxRate ? `VAT (${creditMemoData.taxRate}%):` : 'VAT:'}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
-                  {formatCurrency(creditMemoData.taxAmount && creditMemoData.taxAmount > 0 ? creditMemoData.taxAmount : computedVat)}
-                </td>
-              </tr>
-              {#if creditMemoData.withholdingTax}
-                <tr>
-                  <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="6">Less: Withholding Tax ({creditMemoData.withholdingTax}%):</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600 text-right">-{formatCurrency((creditMemoData.subtotal || 0) * (parseFloat(creditMemoData.withholdingTax) / 100))}</td>
-                </tr>
-              {/if}
-              <tr>
-                <td class="px-6 py-4 text-sm text-right font-medium text-gray-700" colspan="6">Total Amount:</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-right">{formatCurrency(creditMemoData.totalAmount && creditMemoData.totalAmount > 0 ? creditMemoData.totalAmount : computedTotal)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        {:else}
-          <div class="text-center py-8 text-gray-500">
-            No items found.
-          </div>
-        {/if}
-      </div>
-    </div>
+      <hr class="my-4" style="border-color: var(--color-neutral-200);" />
 
-    <!-- Accounting Entries Section -->
-    {#if accountingEntries && accountingEntries.length > 0}
-      <div class="bg-white shadow-md rounded-lg overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h2 class="text-lg font-semibold text-gray-700">Accounting Entries</h2>
-        </div>
+      <!-- Items Section -->
+      <div>
+        <h2 class="text-base font-semibold mb-3" style="color: var(--color-neutral-800);">Credit Memo Items</h2>
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Debit</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              {#each accountingEntries as entry}
+          {#if creditMemoData.items && creditMemoData.items.length > 0}
+            <table class="min-w-full text-sm">
+              <thead>
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{entry.accountName}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{entry.lineDescription}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
-                    {entry.debit > 0 ? formatCurrency(entry.debit) : '-'}
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Item</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Quantity</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Unit</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Unit Price</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Tax Type</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each creditMemoData.items as item}
+                  <tr>
+                    <td class="px-3 py-2.5" style="color: var(--color-neutral-700); border-bottom: 1px solid var(--color-neutral-100);">
+                      {getItemLabel(item)}
+                    </td>
+                    <td class="px-3 py-2.5" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">{item.description || '-'}</td>
+                    <td class="px-3 py-2.5 text-right" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
+                      {item.quantity}
+                    </td>
+                    <td class="px-3 py-2.5" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
+                      {getUnitLabel(item)}
+                    </td>
+                    <td class="px-3 py-2.5 text-right" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(item.unitPrice)}</td>
+                    <td class="px-3 py-2.5" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
+                      {item.taxTypeName || getTaxTypeLabel(item.taxType)}
+                    </td>
+                    <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(item.quantity * item.unitPrice)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-neutral-700); border-bottom: 1px solid var(--color-neutral-100);" colspan="6">Subtotal:</td>
+                  <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(creditMemoData.subtotal || 0)}</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-neutral-700); border-bottom: 1px solid var(--color-neutral-100);" colspan="6">
+                    {creditMemoData.taxRate ? `VAT (${creditMemoData.taxRate}%):` : 'VAT:'}
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
-                    {entry.credit > 0 ? formatCurrency(entry.credit) : '-'}
+                  <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
+                    {formatCurrency(creditMemoData.taxAmount && creditMemoData.taxAmount > 0 ? creditMemoData.taxAmount : computedVat)}
                   </td>
                 </tr>
-              {/each}
-            </tbody>
-            <tfoot class="bg-gray-50">
-              <tr>
-                <td class="px-6 py-4 text-sm font-medium text-gray-700" colspan="2">Totals:</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-bold">
-                  {formatCurrency(accountingEntries.reduce((sum: number, entry: any) => sum + (entry.debit || 0), 0))}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-bold">
-                  {formatCurrency(accountingEntries.reduce((sum: number, entry: any) => sum + (entry.credit || 0), 0))}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+                {#if creditMemoData.withholdingTax}
+                  <tr>
+                    <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-neutral-700); border-bottom: 1px solid var(--color-neutral-100);" colspan="6">Less: Withholding Tax ({creditMemoData.withholdingTax}%):</td>
+                    <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-error-600); border-bottom: 1px solid var(--color-neutral-100);">-{formatCurrency((creditMemoData.subtotal || 0) * (parseFloat(creditMemoData.withholdingTax) / 100))}</td>
+                  </tr>
+                {/if}
+                <tr>
+                  <td class="px-3 py-2.5 text-right font-semibold" style="color: var(--color-neutral-800);" colspan="6">Total Amount:</td>
+                  <td class="px-3 py-2.5 text-right font-bold" style="color: var(--color-neutral-800);">{formatCurrency(creditMemoData.totalAmount && creditMemoData.totalAmount > 0 ? creditMemoData.totalAmount : computedTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          {:else}
+            <div class="text-center py-8 text-sm" style="color: var(--color-neutral-500);">
+              No items found.
+            </div>
+          {/if}
         </div>
       </div>
-    {/if}
+
+      <!-- Accounting Entries Section -->
+      {#if accountingEntries && accountingEntries.length > 0}
+        <hr class="my-4" style="border-color: var(--color-neutral-200);" />
+        <div>
+          <h2 class="text-base font-semibold mb-3" style="color: var(--color-neutral-800);">Accounting Entries</h2>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr>
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Account</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Debit</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Credit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each accountingEntries as entry}
+                  <tr>
+                    <td class="px-3 py-2.5" style="color: var(--color-neutral-700); border-bottom: 1px solid var(--color-neutral-100);">{entry.accountName}</td>
+                    <td class="px-3 py-2.5" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">{entry.lineDescription}</td>
+                    <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-success-600); border-bottom: 1px solid var(--color-neutral-100);">
+                      {entry.debit > 0 ? formatCurrency(entry.debit) : '-'}
+                    </td>
+                    <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-error-600); border-bottom: 1px solid var(--color-neutral-100);">
+                      {entry.credit > 0 ? formatCurrency(entry.credit) : '-'}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td class="px-3 py-2.5 font-medium" style="color: var(--color-neutral-700);" colspan="2">Totals:</td>
+                  <td class="px-3 py-2.5 text-right font-bold" style="color: var(--color-success-600);">
+                    {formatCurrency(accountingEntries.reduce((sum: number, entry: any) => sum + (entry.debit || 0), 0))}
+                  </td>
+                  <td class="px-3 py-2.5 text-right font-bold" style="color: var(--color-error-600);">
+                    {formatCurrency(accountingEntries.reduce((sum: number, entry: any) => sum + (entry.credit || 0), 0))}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>

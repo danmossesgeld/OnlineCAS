@@ -14,15 +14,6 @@
     { label: 'Status', key: 'status' }
   ];
 
-  // Source type map for display
-  const sourceTypeMap: Record<string, string> = {
-    'salesInvoice': 'Sales Invoice',
-    'apv': 'AP Voucher',
-    'payment': 'Payment',
-    'receipt': 'Receipt',
-    'general': 'General Journal'
-  };
-  
   // Set up query options to sort by date descending
   const queryOptions = [orderBy('createdAt', 'desc')];
 

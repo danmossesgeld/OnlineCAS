@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
+/* Class-based dark mode: toggled by themeStore adding/removing `dark` on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ===== DESIGN SYSTEM VARIABLES ===== */
 :root {
   /* === COLORS === */
@@ -18,9 +21,11 @@
   --color-primary-950: #172554;
 
   /* Neutral Colors */
-  --color-neutral-0: #ffffff;
-  --color-neutral-50: #f8fafc;
-  --color-neutral-100: #f1f5f9;
+  /* neutral-0 is a soft "modern white" (not pure #fff) — flat surfaces (cards, sidebar,
+     headers) sit on this everywhere, and pure white at that scale reads as glare. */
+  --color-neutral-0: #fafbfc;
+  --color-neutral-50: #f4f6f8;
+  --color-neutral-100: #eef1f5;
   --color-neutral-200: #e2e8f0;
   --color-neutral-300: #cbd5e1;
   --color-neutral-400: #94a3b8;
@@ -87,12 +92,15 @@
   --radius-xl: 1rem;      /* 16px */
   --radius-2xl: 1.5rem;   /* 24px */
 
-  /* === SHADOWS === */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  /* === SHADOWS ===
+   * Deliberately light — this app uses flat surfaces with 1px borders as the primary
+   * separator; shadows are just a faint lift for the few elements that need to float
+   * (dropdowns, modals), not a card-styling device. */
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 2px 6px -1px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 4px 10px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 8px 20px -4px rgba(15, 23, 42, 0.1), 0 4px 8px -4px rgba(15, 23, 42, 0.05);
+  --shadow-2xl: 0 12px 28px -8px rgba(15, 23, 42, 0.16);
 
   /* === TRANSITIONS === */
   --transition-fast: 150ms ease-in-out;
@@ -107,6 +115,69 @@
   --z-modal: 1050;
   --z-popover: 1060;
   --z-tooltip: 1070;
+
+  /* === SEMANTIC SURFACE TOKENS ===
+   * Prefer these over raw Tailwind bg-white/bg-gray-* + dark: pairs when touching
+   * shared components — they flip automatically with the theme, no dark: needed. */
+  --surface: var(--color-neutral-0);       /* card/page surface */
+  --surface-alt: var(--color-neutral-50);  /* app background, subtle alt rows */
+  --surface-hover: var(--color-neutral-100);
+  --border-subtle: var(--color-neutral-200);
+  --text-primary: var(--color-neutral-800);
+  --text-secondary: var(--color-neutral-500);
+}
+
+/* ===== DARK PALETTE =====
+ * Same variable names, dark values. The neutral ramp is inverted in *role* (0 = surface,
+ * 900 = strongest text) so components that already read var(--color-neutral-*) reflow
+ * automatically. Tailwind utility classes (bg-white, text-gray-700, ...) do NOT read
+ * these — those need explicit dark: variants where used directly in markup. */
+:root.dark {
+  --color-neutral-0: #1a2333;
+  --color-neutral-50: #10151f;
+  --color-neutral-100: #232e42;
+  --color-neutral-200: #313f57;
+  --color-neutral-300: #465672;
+  --color-neutral-400: #7b8bab;
+  --color-neutral-500: #9aa8c4;
+  --color-neutral-600: #b9c4dc;
+  --color-neutral-700: #d3dbec;
+  --color-neutral-800: #eaeefa;
+  --color-neutral-900: #f7f9ff;
+
+  --color-primary-50: rgba(59, 130, 246, 0.14);
+  --color-primary-100: rgba(59, 130, 246, 0.22);
+  --color-primary-200: rgba(96, 165, 250, 0.32);
+  --color-primary-300: #5b93f5;
+  --color-primary-400: #6ea3ff;
+  --color-primary-500: #4f8bf5;
+  --color-primary-600: #6ba0ff;
+  --color-primary-700: #8fb6ff;
+  --color-primary-800: #bcd3ff;
+  --color-primary-900: #dce8ff;
+
+  --color-success-50: rgba(34, 197, 94, 0.14);
+  --color-success-500: #34d16b;
+  --color-success-600: #4ade80;
+  --color-success-700: #86efac;
+
+  --color-warning-50: rgba(245, 158, 11, 0.14);
+  --color-warning-500: #f5a524;
+  --color-warning-600: #fbbf24;
+  --color-warning-700: #fcd34d;
+
+  --color-error-50: rgba(239, 68, 68, 0.14);
+  --color-error-500: #f16565;
+  --color-error-600: #f87171;
+  --color-error-700: #fca5a5;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 2px 6px -1px rgba(0, 0, 0, 0.32), 0 1px 3px -1px rgba(0, 0, 0, 0.24);
+  --shadow-lg: 0 4px 10px -2px rgba(0, 0, 0, 0.4), 0 2px 6px -2px rgba(0, 0, 0, 0.28);
+  --shadow-xl: 0 8px 20px -4px rgba(0, 0, 0, 0.44), 0 4px 8px -4px rgba(0, 0, 0, 0.3);
+  --shadow-2xl: 0 12px 28px -8px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
 }
 
 /* ===== GLOBAL STYLES ===== */
@@ -128,6 +199,7 @@ body {
   color: var(--color-neutral-700);
   font-size: var(--text-base);
   line-height: 1.6;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
 /* ===== UTILITY CLASSES ===== */
@@ -138,11 +210,10 @@ body {
   background-clip: text;
 }
 
+/* Flat surface (was a blurred glassmorphism panel) — solid, theme-aware, minimal shadow */
 .glass-effect {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-200);
 }
 
 
@@ -198,16 +269,15 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-/* ===== SUMMARY CARD STYLES ===== */
+/* ===== SUMMARY CARD STYLES (flat stat tile) ===== */
 .summary-card {
   position: relative;
   overflow: hidden;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   padding: 1rem;
-  transition: all 0.2s ease;
-  background: linear-gradient(135deg, var(--color-neutral-0), var(--color-neutral-50));
-  border: 1px solid var(--color-neutral-100);
-  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-200);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -218,21 +288,18 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 0.25rem;
+  width: 3px;
   height: 100%;
-  background: linear-gradient(to bottom, var(--color-primary-500), var(--color-primary-600));
-  opacity: 0.8;
-  transition: all 0.3s ease;
+  background: var(--color-primary-500);
+  opacity: 0.7;
 }
 
 .summary-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--color-primary-100);
+  border-color: var(--color-primary-200);
+  background: var(--color-primary-50);
 }
 
 .summary-card:hover::before {
-  width: 4px;
   opacity: 1;
 }
 

@@ -9,8 +9,11 @@ export enum AccountType {
   Asset = 'asset',
   Liability = 'liability',
   Equity = 'equity',
-  Income = 'income',
-  Expense = 'expense'
+  // NOTE: value is 'revenue', not 'income' — this matches the value the Chart of Accounts
+  // form and the Items masterlist's income-account filter actually use throughout the app.
+  Revenue = 'revenue',
+  Expense = 'expense',
+  Cogs = 'cogs'
 }
 
 /**
@@ -183,11 +186,12 @@ export async function getAccountBalances(dateRange: DateRange): Promise<AccountB
       switch (account.accountType) {
         case AccountType.Asset:
         case AccountType.Expense:
+        case AccountType.Cogs:
           normalBalance = NormalBalance.Debit;
           break;
         case AccountType.Liability:
         case AccountType.Equity:
-        case AccountType.Income:
+        case AccountType.Revenue:
           normalBalance = NormalBalance.Credit;
           break;
       }
@@ -272,7 +276,7 @@ function determineAccountTypeFromName(accountName: string): AccountType {
   } else if (name.includes('equity') || name.includes('capital') || name.includes('retained')) {
     return AccountType.Equity;
   } else if (name.includes('revenue') || name.includes('sales') || name.includes('income')) {
-    return AccountType.Income;
+    return AccountType.Revenue;
   } else if (name.includes('expense') || name.includes('cost')) {
     return AccountType.Expense;
   } else {

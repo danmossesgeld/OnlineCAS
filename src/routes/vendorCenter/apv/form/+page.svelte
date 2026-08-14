@@ -24,12 +24,11 @@
     loadDocument();
   }
   
-  // Adjust page title based on mode
-  $: pageTitle = {
-    'create': 'Create APV',
-    'edit': 'Edit APV',
-    'view': 'View APV'
-  }[mode];
+  // Show the actual APV number once known, instead of a generic "Edit/View APV"
+  // label — falls back to a mode label for a brand-new, not-yet-saved APV.
+  $: pageTitle = isCreateMode
+    ? 'New APV'
+    : (formData.originalApvNo && formData.originalApvNo !== 'DRAFT' ? formData.originalApvNo : (mode === 'view' ? 'View APV' : 'Edit APV'));
 
   // Subscribe to Firestore option stores and use arrays for select fields
   let supplierOptions: {label: string, value: any}[] = [];
@@ -85,6 +84,7 @@
     memo: string;
     withholdingTax: string;
     originalApvNo?: string; // Optional field to track original APV number in edit mode
+    status?: string; // Tracks the currently-saved status when loading an existing APV
   };
 
   // Initialize form data with empty values
@@ -199,8 +199,8 @@
       }
       
       // Populate form data all at once for better performance
-      const { apvNo, supplier, account, apvDate, dueDate, selectedTerms, paymentMethod, referenceNo, poNumber, memo, withholdingTax, lineItems: docLineItems } = docData;
-      
+      const { apvNo, supplier, account, apvDate, dueDate, selectedTerms, paymentMethod, referenceNo, poNumber, memo, withholdingTax, status, lineItems: docLineItems } = docData;
+
       // Update form data with proper defaults
       formData = {
         supplier: supplier || '',
@@ -213,8 +213,9 @@
         poNumber: poNumber || '',
         memo: memo || '',
         withholdingTax: withholdingTax || '',
-        // Keep track of original APV number for edit mode
-        originalApvNo: apvNo
+        // Keep track of original APV number and status for edit mode
+        originalApvNo: apvNo,
+        status: status || 'Draft'
       };
       
       // Handle line items with deep copy to prevent reference issues
@@ -330,7 +331,9 @@
    * Save the APV data to Firestore
    */
   // Handle saving, updating, or navigating based on current mode
-  async function handleSave() {
+  // status defaults to 'Posted' (the primary Create/Update button); the secondary
+  // "Save as Draft" button passes 'Draft' explicitly.
+  async function handleSave(status: 'Draft' | 'Posted' = 'Posted') {
     try {
       // Handle view mode - just navigate back to list
       if (isViewMode) {
@@ -410,42 +413,52 @@
 
       // Handle mode-specific operations
       if (isCreateMode) {
-        // Generate a sequential APV number
-        const apvNo = await generateNextDocumentId(DocumentType.APV);
-        
+        // Only reserve a real sequential number once the APV is actually posted;
+        // drafts use a placeholder so abandoned drafts don't burn sequence numbers.
+        const apvNo = status === 'Draft' ? 'DRAFT' : await generateNextDocumentId(DocumentType.APV);
+
         const newApvData = {
           ...baseApvData,
           apvNo,
           createdAt: new Date(),
-          status: 'Draft'
+          status
         };
-        
+
         // Add the APV to Firestore and get the document reference
         const docRef = await addDocToCollection('transactions/vendorCenter/apvs', newApvData);
-        
+
         // Create journal entry for the new APV
         const apvWithId = { ...newApvData, id: docRef.id };
         const journalEntryId = await createApvJournalEntry(apvWithId);
-        
+
         // Log the result for debugging
         console.log(`Created journal entry with ID: ${journalEntryId}`);
-        alert('APV created successfully');
+        alert(status === 'Draft' ? 'APV saved as draft' : 'APV created successfully');
       } else if (isEditMode) {
+        // Promote a draft's placeholder number to a real sequential number the first time it's posted
+        let apvNo = formData.originalApvNo;
+        if (formData.status === 'Draft' && status !== 'Draft' && apvNo === 'DRAFT') {
+          apvNo = await generateNextDocumentId(DocumentType.APV);
+        } else if (status === 'Draft' && !apvNo) {
+          apvNo = 'DRAFT';
+        }
+
         const updateApvData = {
           ...baseApvData,
-          apvNo: formData.originalApvNo || await generateNextDocumentId(DocumentType.APV)
+          apvNo: apvNo || await generateNextDocumentId(DocumentType.APV),
+          status
         };
-        
+
         // Update the APV in Firestore
         await updateDocInCollection('transactions/vendorCenter/apvs', docId, updateApvData);
-        
+
         // Create or update journal entry for the updated APV
         const apvWithId = { ...updateApvData, id: docId };
         const journalEntryId = await createApvJournalEntry(apvWithId);
-        
+
         // Log the result for debugging
         console.log(`Updated journal entry with ID: ${journalEntryId}`);
-        alert('APV updated successfully');
+        alert(status === 'Draft' ? 'APV updated and saved as draft' : 'APV updated successfully');
       }
       
       // Navigate to the list view after successful save
@@ -454,7 +467,7 @@
     } catch (error) {
       console.error('Error saving APV:', error);
       // Handle errors, e.g., show an error message to the user
-      alert('Failed to save APV. Please try again.');
+      alert('Failed to save APV: ' + (error instanceof Error ? error.message : 'Please try again.'));
     }
   }
 
@@ -466,8 +479,7 @@
     { label: 'Payment Terms', name: 'selectedTerms', type: 'select', options: termsOptions },
     { label: 'Payment Method', name: 'paymentMethod', type: 'select', options: paymentMethodOptions },
     { label: 'Reference #', name: 'referenceNo', type: 'text', placeholder: 'e.g. Invoice # from supplier' },
-    { label: 'PO #', name: 'poNumber', type: 'text', placeholder: 'e.g PO-0001' },
-    { label: 'Memo', name: 'memo', type: 'textarea', placeholder: 'Add a memo' }
+    { label: 'PO #', name: 'poNumber', type: 'text', placeholder: 'e.g PO-0001' }
   ];
 
   $: columns = [
@@ -491,6 +503,21 @@
 </script>
 
 <FormLayout title={pageTitle} backPath="/vendorCenter/apv/list">
+  <svelte:fragment slot="header-actions">
+    <div class="w-full sm:w-64">
+      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+      <textarea
+        id="field-memo"
+        rows="2"
+        class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
+        style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        placeholder="Add a memo"
+        bind:value={formData.memo}
+        disabled={isViewMode}
+      ></textarea>
+    </div>
+  </svelte:fragment>
+
   <!-- Fields section -->
   <FormSection withSeparator={false}>
     <TxnFields {fields} bind:formData disabled={isViewMode} />
@@ -503,6 +530,7 @@
     actionLabel="Add Item"
     onAction={addItem}
     isItemTable={true}
+    grow={true}
     columns={columns}
     items={lineItems}
     onAdd={!isViewMode ? addItem : undefined}
@@ -515,8 +543,8 @@
   <FormFooter
     primaryLabel={isCreateMode ? "Create APV" : "Update APV"}
     secondaryLabel="Save as Draft"
-    onPrimaryClick={handleSave}
-    onSecondaryClick={() => { /* handle save as draft */ }}
+    onPrimaryClick={() => handleSave('Posted')}
+    onSecondaryClick={() => handleSave('Draft')}
     showSecondaryButton={!isViewMode}
     hideButtons={isViewMode}
     summaryMode="transaction"

@@ -5,23 +5,37 @@
   export let backPath = '';
 </script>
 
-<div class="flex flex-col h-full w-full p-2 sm:p-4 md:p-6 lg:p-8 bg-gray-50">
-  <div class="flex items-center mb-4 md:mb-6 px-2">
-    {#if backPath}
-      <button 
-        on:click={() => goto(backPath)}
-        class="flex items-center justify-center w-9 h-9 mr-3 bg-white hover:bg-blue-50 text-gray-600 hover:text-blue-600 rounded-lg shadow-sm hover:shadow transition-all focus:outline-none focus:ring-2 focus:ring-blue-200" 
-        aria-label="Back"
-      >
-        <iconify-icon icon="material-symbols:arrow-back-rounded" width="20" height="20"></iconify-icon>
-      </button>
-    {/if}
-    <h1 class="text-2xl md:text-3xl font-bold text-gray-800">{title}</h1>
-  </div>
-  
+<div class="flex flex-col flex-1 w-full min-h-0">
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <form on:submit|preventDefault on:keydown class="flex flex-col flex-1 h-full w-full">
-    <div class="bg-white rounded-xl shadow-sm p-4 flex flex-col flex-1">
+  <form on:submit|preventDefault on:keydown class="flex flex-col flex-1 min-h-0 w-full">
+    <div
+      class="rounded-lg border p-4 sm:p-5 flex flex-col flex-1 min-h-0"
+      style="background: var(--color-neutral-0); border-color: var(--color-neutral-200);"
+    >
+      <!-- Header lives inside the card now, not floating above it. header-actions is
+           sized to comfortably hold a compact memo/notes box (QuickBooks-style), not
+           just a small icon button — see TxnFields' docblock for the pattern. -->
+      <div class="flex items-start mb-4 gap-3 shrink-0 flex-wrap">
+        <div class="flex items-center gap-3">
+          {#if backPath}
+            <button
+              on:click={() => goto(backPath)}
+              class="flex items-center justify-center w-9 h-9 rounded-lg border transition-colors focus:outline-none focus:ring-2 shrink-0"
+              style="background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-600);"
+              aria-label="Back"
+            >
+              <iconify-icon icon="material-symbols:arrow-back-rounded" width="20" height="20"></iconify-icon>
+            </button>
+          {/if}
+          <slot name="title">
+            <h1 class="text-xl md:text-2xl font-semibold" style="color: var(--color-neutral-800);">{title}</h1>
+          </slot>
+        </div>
+        <div class="ml-auto flex items-start gap-3 w-full sm:w-auto">
+          <slot name="header-actions"></slot>
+        </div>
+      </div>
+
       <slot></slot>
     </div>
   </form>

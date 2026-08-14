@@ -71,124 +71,110 @@
   $: total = totalDue ?? computedTotalDue;
 </script>
 
-<div class="mt-auto flex flex-col xl:flex-row gap-4">
-  <!-- Left side for summary content -->
+<div class="mt-4 shrink-0 flex flex-col xl:flex-row xl:items-end gap-4">
+  <!-- Left side: action buttons — the primary thing a user does at the bottom of a form,
+       so they get real visual weight and the prime lower-left position. -->
+  {#if !hideButtons}
+    <div class="w-full xl:w-auto flex flex-col justify-end shrink-0 order-1">
+      <slot name="custom-buttons">
+        <div class="flex gap-3 flex-wrap">
+          {#if showSecondaryButton}
+            <button
+              class="px-6 py-3 rounded-lg font-semibold text-base transition-colors focus:outline-none focus:ring-2"
+              style="background: var(--color-neutral-0); border: 2px solid var(--color-primary-500); color: var(--color-primary-600); --tw-ring-color: var(--color-primary-300);"
+              type="button"
+              on:click={onSecondaryClick}
+            >
+              {secondaryLabel}
+            </button>
+          {/if}
+          <button
+            class="px-7 py-3 rounded-lg font-semibold text-base text-white transition-colors focus:outline-none focus:ring-2"
+            style="background: var(--color-primary-600); box-shadow: var(--shadow-md); --tw-ring-color: var(--color-primary-300);"
+            type="submit"
+            on:click={onPrimaryClick}
+          >
+            {primaryLabel}
+          </button>
+        </div>
+      </slot>
+    </div>
+  {/if}
+
+  <!-- Right side: summary figures, blended into the form — no card, no border,
+       just right-aligned text sitting on the same surface as everything else. -->
   {#if leftSideContent}
-    <div class="w-full xl:w-2/5">
+    <div class="w-full xl:w-auto xl:ml-auto order-2">
       {#if summaryMode === 'transaction'}
-        <!-- Transaction Summary -->
-        <div class="bg-white p-0 text-sm w-full">
-          <div class="p-0">
-            <h2 class="text-lg font-semibold text-gray-800 mb-4">Summary</h2>
-            
-            <!-- Withholding Tax Settings -->
-            <div class="mb-4">
-              <label for="withholding-tax" class="block mb-1 text-sm font-medium text-gray-700">Withholding Tax (%)</label>
-              <select id="withholding-tax" class="w-full px-3 py-2 text-sm {readOnly ? 'bg-gray-100' : 'bg-gray-50'} border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400" bind:value={withholdingTax} disabled={readOnly}>
-                {#each withholdingTaxOptions as opt}
-                  <option value={opt.value}>{opt.label}</option>
-                {/each}
-              </select>
-            </div>
-            
-            <!-- Summary Values - Two Column Layout -->
-            <div class="space-y-5">
-              <!-- Two-column summary layout with improved spacing -->
-              <div class="flex gap-8">
-                <!-- Left column with better typography -->
-                <div class="w-1/2 space-y-3">
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-700 text-sm">Gross Amount:</span>
-                    <span class="font-medium text-base">₱{gross.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-700 text-sm">Discount:</span>
-                    <span class="text-red-500 font-medium text-base">-₱{disc.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-700 text-sm">Net Sales:</span>
-                    <span class="font-medium text-base">₱{net.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-700 text-sm">VAT:</span>
-                    <span class="font-medium text-base">₱{vatVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                </div>
-                
-                <!-- Right column with better typography -->
-                <div class="w-1/2 space-y-3">
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-700 text-sm">Vatable Sales:</span>
-                    <span class="font-medium text-base">₱{vatable.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-700 text-sm">Zero-rated:</span>
-                    <span class="font-medium text-base">₱{zero.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-700 text-sm">VAT-Exempt:</span>
-                    <span class="font-medium text-base">₱{exempt.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-700 text-sm">{withholdingLabel}:</span>
-                    <span class="text-red-500 font-medium text-base">-₱{withhold.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                </div>
+        <div class="text-sm w-full xl:max-w-md xl:ml-auto">
+          <div class="flex items-center justify-end gap-1.5 mb-2 text-xs">
+            <label for="withholding-tax" style="color: var(--color-neutral-500);">Withholding Tax:</label>
+            <select
+              id="withholding-tax"
+              class="rounded border px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 transition-colors"
+              style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+              bind:value={withholdingTax}
+              disabled={readOnly}
+            >
+              {#each withholdingTaxOptions as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+
+          <!-- Two-column figures, right-aligned, no container box -->
+          <div class="flex justify-end gap-6">
+            <div class="space-y-1.5">
+              <div class="flex justify-between gap-3">
+                <span style="color: var(--color-neutral-500);">Gross Amount</span>
+                <span class="font-medium" style="color: var(--color-neutral-800);">₱{gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
-              
-              <!-- Total Amount Due with improved styling -->
-              <div class="flex justify-between font-bold mt-4 pt-3 border-t border-gray-300 items-center">
-                <span class="flex items-center">
-                  <iconify-icon icon="material-symbols:payments" width="24" height="24" class="mr-2 text-green-600"></iconify-icon> 
-                  <span class="text-lg">{totalLabel}:</span>
-                </span>
-                <span class="text-green-600 bg-green-50 px-4 py-2 rounded-lg border border-green-200 text-lg">₱{total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+              <div class="flex justify-between gap-3">
+                <span style="color: var(--color-neutral-500);">Discount</span>
+                <span class="font-medium" style="color: var(--color-error-600);">-₱{disc.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span style="color: var(--color-neutral-500);">Net Sales</span>
+                <span class="font-medium" style="color: var(--color-neutral-800);">₱{net.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span style="color: var(--color-neutral-500);">VAT</span>
+                <span class="font-medium" style="color: var(--color-neutral-800);">₱{vatVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
             </div>
+            <div class="space-y-1.5">
+              <div class="flex justify-between gap-3">
+                <span style="color: var(--color-neutral-500);">Vatable Sales</span>
+                <span class="font-medium" style="color: var(--color-neutral-800);">₱{vatable.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span style="color: var(--color-neutral-500);">Zero-rated</span>
+                <span class="font-medium" style="color: var(--color-neutral-800);">₱{zero.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span style="color: var(--color-neutral-500);">VAT-Exempt</span>
+                <span class="font-medium" style="color: var(--color-neutral-800);">₱{exempt.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span style="color: var(--color-neutral-500);">{withholdingLabel}</span>
+                <span class="font-medium" style="color: var(--color-error-600);">-₱{withhold.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Amount Due -->
+          <div class="flex justify-end items-center gap-3 mt-3 pt-2.5" style="border-top: 1px solid var(--color-neutral-200);">
+            <span class="flex items-center gap-1 font-medium" style="color: var(--color-neutral-700);">
+              <iconify-icon icon="material-symbols:payments" width="16" height="16" style="color: var(--color-success-600);"></iconify-icon>
+              {totalLabel}
+            </span>
+            <span class="font-semibold text-base" style="color: var(--color-success-600);">₱{total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
           </div>
         </div>
       {:else if summaryMode === 'custom'}
         <!-- Custom summary from slot -->
         <slot name="summary"></slot>
       {/if}
-    </div>
-  {/if}
-  
-  <!-- Right side with form buttons (only shown if not hideButtons) -->
-  {#if !hideButtons}
-    <div class="w-full {leftSideContent ? 'xl:w-3/5' : ''} flex flex-col justify-end">
-      <div class="w-full flex justify-end">
-        <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <slot name="custom-buttons">
-            <div class="flex gap-3 justify-end w-full flex-wrap mt-2">
-              {#if showSecondaryButton}
-                <button
-                  class="bg-transparent border-2 border-indigo-500 text-indigo-600 hover:bg-indigo-50
-                         px-5 py-2.5 rounded-lg font-medium flex items-center gap-2.5 
-                         transition-all duration-200 ease-in-out 
-                         shadow-sm hover:shadow-md 
-                         focus:outline-none focus:ring-2 focus:ring-opacity-50 focus:ring-indigo-300"
-                  type="button"
-                  on:click={onSecondaryClick}
-                >
-                  {secondaryLabel}
-                </button>
-              {/if}
-              <button
-                class="bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 text-white
-                       px-5 py-2.5 rounded-lg font-medium flex items-center gap-2.5 
-                       transition-all duration-200 ease-in-out 
-                       shadow-sm hover:shadow-md 
-                       focus:outline-none focus:ring-2 focus:ring-opacity-50 focus:ring-indigo-300"
-                type="submit"
-                on:click={onPrimaryClick}
-              >
-                {primaryLabel}
-              </button>
-            </div>
-          </slot>
-        </div>
-      </div>
     </div>
   {/if}
 </div>

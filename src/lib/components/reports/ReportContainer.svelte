@@ -80,6 +80,8 @@
       dispatch('parameterChange', { id, value: param.value });
     }
   }
+
+  const inputStyle = 'background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);';
 </script>
 
 <svelte:head>
@@ -105,90 +107,92 @@
   </style>
 </svelte:head>
 
-<div class="container mx-auto py-6 px-4">
+<div class="container mx-auto py-2 px-0">
   <!-- Header Section -->
-  <div class="flex justify-between items-center mb-6">
+  <div class="flex justify-between items-center mb-4">
     <div>
-      <h1 class="text-2xl font-semibold text-gray-800">{title}</h1>
-      <p class="text-gray-600 mt-1">{description}</p>
+      <h1 class="text-xl md:text-2xl font-semibold" style="color: var(--color-neutral-800);">{title}</h1>
+      <p class="text-sm mt-0.5" style="color: var(--color-neutral-500);">{description}</p>
     </div>
-    
-    <div class="flex space-x-3">
-      <button 
-        class="px-4 py-2 bg-gray-100 text-gray-700 rounded shadow-sm hover:bg-gray-200 transition-colors flex items-center space-x-2 no-print"
+
+    <div class="flex space-x-2 no-print">
+      <button
+        class="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 border"
+        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
         on:click={handlePrint}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-        </svg>
+        <iconify-icon icon="material-symbols:print-outline" width="18" height="18"></iconify-icon>
         <span>Print</span>
       </button>
-      
-      <button 
-        class="px-4 py-2 bg-blue-600 text-white rounded shadow-sm hover:bg-blue-700 transition-colors flex items-center space-x-2 no-print"
+
+      <button
+        class="px-3.5 py-2 rounded-lg text-sm font-medium text-white transition-colors flex items-center space-x-2"
+        style="background: var(--color-primary-600);"
         on:click={handleExport}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
+        <iconify-icon icon="material-symbols:download" width="18" height="18"></iconify-icon>
         <span>Export</span>
       </button>
     </div>
   </div>
 
   <!-- Parameters Section -->
-  <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 no-print">
-    <h2 class="text-lg font-semibold text-gray-700 mb-4">Report Parameters</h2>
-    
-    <div class="grid grid-cols-1 {parameterType === 'dateRange' ? 'md:grid-cols-2' : ''} gap-6">
+  <div class="rounded-lg border p-4 mb-4 no-print" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200);">
+    <h2 class="text-sm font-medium uppercase tracking-wide mb-3" style="color: var(--color-neutral-500);">Report Parameters</h2>
+
+    <div class="grid grid-cols-1 {parameterType === 'dateRange' ? 'md:grid-cols-2' : ''} gap-4">
       {#if parameterType === 'dateRange'}
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1" for="startDate">
+          <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-600);" for="startDate">
             Start Date
           </label>
           <input
             type="date"
             id="startDate"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            class="block w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2"
+            style={inputStyle}
             bind:value={startDate}
           />
         </div>
-        
+
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1" for="endDate">
+          <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-600);" for="endDate">
             End Date
           </label>
           <input
             type="date"
             id="endDate"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            class="block w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2"
+            style={inputStyle}
             bind:value={endDate}
           />
         </div>
       {:else if parameterType === 'asOfDate'}
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1" for="asOfDate">
+          <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-600);" for="asOfDate">
             As of Date
           </label>
           <input
             type="date"
             id="asOfDate"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            class="block w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2"
+            style={inputStyle}
             bind:value={asOfDate}
           />
         </div>
       {/if}
-      
+
       {#each customParameters as param}
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1" for={param.id}>
+          <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-600);" for={param.id}>
             {param.label}
           </label>
-          
+
           {#if param.type === 'select'}
             <select
               id={param.id}
-              class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              class="block w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2"
+              style={inputStyle}
               value={param.value}
               on:change={(e) => handleParameterChange(param.id, e)}
             >
@@ -200,7 +204,8 @@
             <input
               type="number"
               id={param.id}
-              class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              class="block w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2"
+              style={inputStyle}
               value={param.value}
               on:change={(e) => handleParameterChange(param.id, e)}
             />
@@ -208,7 +213,8 @@
             <input
               type="date"
               id={param.id}
-              class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              class="block w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2"
+              style={inputStyle}
               value={param.value}
               on:change={(e) => handleParameterChange(param.id, e)}
             />
@@ -216,7 +222,8 @@
             <input
               type="text"
               id={param.id}
-              class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              class="block w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2"
+              style={inputStyle}
               value={param.value}
               on:change={(e) => handleParameterChange(param.id, e)}
             />
@@ -224,10 +231,11 @@
         </div>
       {/each}
     </div>
-    
+
     <div class="mt-4">
-      <button 
-        class="px-4 py-2 bg-blue-600 text-white rounded shadow-sm hover:bg-blue-700 transition-colors"
+      <button
+        class="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
+        style="background: var(--color-primary-600);"
         on:click={handleGenerateReport}
       >
         Generate Report
@@ -237,28 +245,28 @@
 
   <!-- Report Content Section -->
   {#if loading}
-    <div class="bg-white rounded-2xl shadow-xl p-6 flex justify-center items-center h-64">
-      <p class="text-gray-600">Loading report data...</p>
+    <div class="rounded-lg border p-6 flex justify-center items-center h-64" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200);">
+      <p style="color: var(--color-neutral-500);">Loading report data...</p>
     </div>
   {:else if error}
-    <div class="bg-red-50 border border-red-200 p-4 rounded-md">
-      <p class="text-red-600">{error}</p>
+    <div class="p-4 rounded-md border" style="background: var(--color-error-50); border-color: var(--color-error-500); color: var(--color-error-700);">
+      <p>{error}</p>
     </div>
   {:else}
-    <div id="report-container" class="bg-white rounded-2xl shadow-xl p-6">
-      <div class="text-center mb-6">
-        <h2 class="text-xl font-bold text-gray-800">{title}</h2>
+    <div id="report-container" class="rounded-lg border p-4 sm:p-6" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200);">
+      <div class="text-center mb-5">
+        <h2 class="text-lg font-semibold" style="color: var(--color-neutral-800);">{title}</h2>
         {#if parameterType === 'dateRange'}
-          <p class="text-gray-600">For the period {startDate ? formatDate(startDate) : ''} to {endDate ? formatDate(endDate) : ''}</p>
+          <p class="text-sm" style="color: var(--color-neutral-500);">For the period {startDate ? formatDate(startDate) : ''} to {endDate ? formatDate(endDate) : ''}</p>
         {:else if parameterType === 'asOfDate'}
-          <p class="text-gray-600">As of {asOfDate ? formatDate(asOfDate) : ''}</p>
+          <p class="text-sm" style="color: var(--color-neutral-500);">As of {asOfDate ? formatDate(asOfDate) : ''}</p>
         {/if}
       </div>
-      
+
       <!-- Report content slot -->
       <slot name="report-content">
         <div class="text-center py-10">
-          <p class="text-gray-600">No data available for this report.</p>
+          <p style="color: var(--color-neutral-500);">No data available for this report.</p>
         </div>
       </slot>
     </div>

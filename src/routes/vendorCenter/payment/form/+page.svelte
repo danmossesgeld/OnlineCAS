@@ -23,12 +23,11 @@
     loadDocument();
   }
   
-  // Adjust page title based on mode
-  $: pageTitle = {
-    'create': 'Create Vendor Payment',
-    'edit': 'Edit Vendor Payment',
-    'view': 'View Vendor Payment'
-  }[mode];
+  // Show the actual payment number once known, instead of a generic "Edit/View Vendor
+  // Payment" label — falls back to a mode label for a brand-new, not-yet-saved payment.
+  $: pageTitle = isCreateMode
+    ? 'New Vendor Payment'
+    : (formData.paymentNo ? formData.paymentNo : (mode === 'view' ? 'View Vendor Payment' : 'Edit Vendor Payment'));
 
   // Subscribe to Firestore option stores and use arrays for select fields
   let vendorOptions: {label: string, value: any}[] = [];
@@ -47,6 +46,7 @@
     memo: string;
     amount: number;
     selectedBills: string[];
+    paymentNo?: string; // Tracks the saved payment number once loaded, for display in the page title
   };
 
   // Initialize form data with empty values
@@ -145,7 +145,8 @@
         reference: docData.reference || '',
         memo: docData.memo || '',
         amount: docData.amount || 0,
-        selectedBills: docData.billPayments?.map(bp => bp.billId) || []
+        selectedBills: docData.billPayments?.map(bp => bp.billId) || [],
+        paymentNo: docData.paymentNo || ''
       };
       
       // Populate bill allocations
@@ -371,7 +372,7 @@
       
     } catch (error) {
       console.error('Error saving vendor payment:', error);
-      alert('Failed to save vendor payment. Please try again.');
+      alert('Failed to save vendor payment: ' + (error instanceof Error ? error.message : 'Please try again.'));
     }
   }
 
@@ -381,12 +382,26 @@
     { label: 'Payment Date', name: 'paymentDate', type: 'date', required: true },
     { label: 'Payment Method', name: 'paymentMethod', type: 'select', options: paymentMethodOptions, required: true },
     { label: 'Reference', name: 'reference', type: 'text', placeholder: 'Check No., Transaction ID, etc.' },
-    { label: 'Memo', name: 'memo', type: 'textarea', rows: 2 },
     { label: 'Amount', name: 'amount', type: 'number', required: true, min: 0 }
   ];
 </script>
 
 <FormLayout title={pageTitle} backPath="/vendorCenter/payment/list">
+  <svelte:fragment slot="header-actions">
+    <div class="w-full sm:w-64">
+      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+      <textarea
+        id="field-memo"
+        rows="2"
+        class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
+        style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        placeholder="Add a memo"
+        bind:value={formData.memo}
+        disabled={isViewMode}
+      ></textarea>
+    </div>
+  </svelte:fragment>
+
   <!-- Fields section -->
   <FormSection withSeparator={false}>
     <TxnFields 
@@ -397,56 +412,58 @@
   </FormSection>
   
   <!-- Bill allocation section -->
-  <FormSection title="Bill Allocation" withSeparator={true}>
+  <FormSection title="Bill Allocation" withSeparator={true} grow={true}>
     <div class="mb-4 flex justify-between items-center">
-      <div class="text-sm text-gray-600">
-        Total: <span class="font-semibold text-gray-800">{formData.amount?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' }) || '₱0.00'}</span> | 
-        Allocated: <span class="font-semibold text-green-600">{allocatedTotal.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span> | 
-        Unallocated: <span class="font-semibold {unallocatedAmount < 0 ? 'text-red-600' : 'text-blue-600'}">{unallocatedAmount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
+      <div class="text-sm" style="color: var(--color-neutral-600);">
+        Total: <span class="font-semibold" style="color: var(--color-neutral-800);">{formData.amount?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' }) || '₱0.00'}</span> |
+        Allocated: <span class="font-semibold" style="color: var(--color-success-600);">{allocatedTotal.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span> |
+        Unallocated: <span class="font-semibold" style={`color: var(${unallocatedAmount < 0 ? '--color-error-600' : '--color-primary-600'});`}>{unallocatedAmount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
       </div>
-      
+
       {#if !isViewMode}
-        <button 
-          class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+        <button
+          class="px-4 py-2 text-white text-sm rounded transition-colors"
+          style="background: var(--color-primary-600);"
           on:click={autoAllocate}
         >
           Auto Allocate
         </button>
       {/if}
     </div>
-    
+
     {#if outstandingBills.length > 0}
-      <div class="bg-white rounded-lg shadow overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount Due</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+              <th class="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Bill</th>
+              <th class="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Due Date</th>
+              <th class="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Amount Due</th>
+              <th class="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Payment</th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody>
             {#each outstandingBills as bill}
               <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{bill.label.split(' - ')[0]}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                <td class="px-4 py-3 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{bill.label.split(' - ')[0]}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
                   {bill.dueDate ? new Date(bill.dueDate.seconds * 1000).toLocaleDateString() : '-'}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                <td class="px-4 py-3 whitespace-nowrap text-sm" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
                   {bill.amount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
+                <td class="px-4 py-3 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
                   {#if isViewMode}
-                    <span class="text-sm text-gray-600">
+                    <span class="text-sm" style="color: var(--color-neutral-600);">
                       {(billAllocations[bill.value] || 0).toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}
                     </span>
                   {:else}
-                    <input 
+                    <input
                       type="number"
                       min="0"
                       max={bill.amount}
-                      class="w-32 rounded border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                      class="w-32 rounded border text-sm focus:outline-none focus:ring-2 transition-colors"
+                      style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
                       bind:value={billAllocations[bill.value]}
                       on:input={updateAllocationTotals}
                     />
@@ -458,11 +475,11 @@
         </table>
       </div>
     {:else if formData.vendor}
-      <div class="text-center py-8 text-gray-500">
+      <div class="text-center py-8" style="color: var(--color-neutral-500);">
         No outstanding bills found for this vendor.
       </div>
     {:else}
-      <div class="text-center py-8 text-gray-500">
+      <div class="text-center py-8" style="color: var(--color-neutral-500);">
         Select a vendor to view outstanding bills.
       </div>
     {/if}

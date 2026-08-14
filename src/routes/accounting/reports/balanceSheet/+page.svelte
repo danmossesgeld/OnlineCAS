@@ -155,145 +155,145 @@
   <div slot="report-content">
     {#if reportData.currentAssets.length === 0 && reportData.nonCurrentAssets.length === 0 && reportData.currentLiabilities.length === 0 && reportData.nonCurrentLiabilities.length === 0 && reportData.equity.length === 0}
       <div class="text-center py-10">
-        <p class="text-gray-600">No account balances found for this period.</p>
+        <p class="text-sm" style="color: var(--color-neutral-600);">No account balances found for this period.</p>
       </div>
     {:else}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         <!-- Assets Column -->
         <div>
-          <h3 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b">Assets</h3>
-          
+          <h3 class="text-lg font-bold mb-4 pb-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-200);">Assets</h3>
+
           <!-- Current Assets Section -->
           <div class="mb-6">
-            <h4 class="text-base font-semibold text-gray-700 mb-3">Current Assets</h4>
+            <h4 class="text-base font-semibold mb-3" style="color: var(--color-neutral-700);">Current Assets</h4>
             {#if reportData.currentAssets.length === 0}
-              <p class="text-sm text-gray-500 italic">No current assets</p>
+              <p class="text-sm italic" style="color: var(--color-neutral-500);">No current assets</p>
             {:else}
               <div class="space-y-2">
                 {#each reportData.currentAssets as asset}
                   <div class="flex justify-between">
-                    <span class="text-sm text-gray-600">{asset.accountName}</span>
-                    <span class="text-sm text-gray-800 font-medium">{formatCurrency(asset.balance)}</span>
+                    <span class="text-sm" style="color: var(--color-neutral-600);">{asset.accountName}</span>
+                    <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(asset.balance)}</span>
                   </div>
                 {/each}
-                <div class="flex justify-between pt-2 border-t">
-                  <span class="text-sm font-semibold text-gray-700">Total Current Assets</span>
-                  <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalCurrentAssets)}</span>
+                <div class="flex justify-between pt-2" style="border-top: 1px solid var(--color-neutral-200);">
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Current Assets</span>
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalCurrentAssets)}</span>
                 </div>
               </div>
             {/if}
           </div>
-          
+
           <!-- Non-Current Assets Section -->
           <div class="mb-6">
-            <h4 class="text-base font-semibold text-gray-700 mb-3">Non-Current Assets</h4>
+            <h4 class="text-base font-semibold mb-3" style="color: var(--color-neutral-700);">Non-Current Assets</h4>
             {#if reportData.nonCurrentAssets.length === 0}
-              <p class="text-sm text-gray-500 italic">No non-current assets</p>
+              <p class="text-sm italic" style="color: var(--color-neutral-500);">No non-current assets</p>
             {:else}
               <div class="space-y-2">
                 {#each reportData.nonCurrentAssets as asset}
                   <div class="flex justify-between">
-                    <span class="text-sm text-gray-600">{asset.accountName}</span>
-                    <span class="text-sm text-gray-800 font-medium">{formatCurrency(asset.balance)}</span>
+                    <span class="text-sm" style="color: var(--color-neutral-600);">{asset.accountName}</span>
+                    <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(asset.balance)}</span>
                   </div>
                 {/each}
-                <div class="flex justify-between pt-2 border-t">
-                  <span class="text-sm font-semibold text-gray-700">Total Non-Current Assets</span>
-                  <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalNonCurrentAssets)}</span>
+                <div class="flex justify-between pt-2" style="border-top: 1px solid var(--color-neutral-200);">
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Non-Current Assets</span>
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalNonCurrentAssets)}</span>
                 </div>
               </div>
             {/if}
           </div>
-          
+
           <!-- Total Assets -->
-          <div class="py-2 border-t border-b border-gray-300">
+          <div class="py-2" style="border-top: 1px solid var(--color-neutral-300); border-bottom: 1px solid var(--color-neutral-300);">
             <div class="flex justify-between">
-              <span class="font-bold text-gray-800">TOTAL ASSETS</span>
-              <span class="font-bold text-gray-800">{formatCurrency(reportData.totalAssets)}</span>
+              <span class="font-bold" style="color: var(--color-neutral-800);">TOTAL ASSETS</span>
+              <span class="font-bold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalAssets)}</span>
             </div>
           </div>
         </div>
-        
+
         <!-- Liabilities and Equity Column -->
         <div>
-          <h3 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b">Liabilities and Equity</h3>
-          
+          <h3 class="text-lg font-bold mb-4 pb-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-200);">Liabilities and Equity</h3>
+
           <!-- Current Liabilities Section -->
           <div class="mb-6">
-            <h4 class="text-base font-semibold text-gray-700 mb-3">Current Liabilities</h4>
+            <h4 class="text-base font-semibold mb-3" style="color: var(--color-neutral-700);">Current Liabilities</h4>
             {#if reportData.currentLiabilities.length === 0}
-              <p class="text-sm text-gray-500 italic">No current liabilities</p>
+              <p class="text-sm italic" style="color: var(--color-neutral-500);">No current liabilities</p>
             {:else}
               <div class="space-y-2">
                 {#each reportData.currentLiabilities as liability}
                   <div class="flex justify-between">
-                    <span class="text-sm text-gray-600">{liability.accountName}</span>
-                    <span class="text-sm text-gray-800 font-medium">{formatCurrency(liability.balance)}</span>
+                    <span class="text-sm" style="color: var(--color-neutral-600);">{liability.accountName}</span>
+                    <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(liability.balance)}</span>
                   </div>
                 {/each}
-                <div class="flex justify-between pt-2 border-t">
-                  <span class="text-sm font-semibold text-gray-700">Total Current Liabilities</span>
-                  <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalCurrentLiabilities)}</span>
+                <div class="flex justify-between pt-2" style="border-top: 1px solid var(--color-neutral-200);">
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Current Liabilities</span>
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalCurrentLiabilities)}</span>
                 </div>
               </div>
             {/if}
           </div>
-          
+
           <!-- Non-Current Liabilities Section -->
           <div class="mb-6">
-            <h4 class="text-base font-semibold text-gray-700 mb-3">Non-Current Liabilities</h4>
+            <h4 class="text-base font-semibold mb-3" style="color: var(--color-neutral-700);">Non-Current Liabilities</h4>
             {#if reportData.nonCurrentLiabilities.length === 0}
-              <p class="text-sm text-gray-500 italic">No non-current liabilities</p>
+              <p class="text-sm italic" style="color: var(--color-neutral-500);">No non-current liabilities</p>
             {:else}
               <div class="space-y-2">
                 {#each reportData.nonCurrentLiabilities as liability}
                   <div class="flex justify-between">
-                    <span class="text-sm text-gray-600">{liability.accountName}</span>
-                    <span class="text-sm text-gray-800 font-medium">{formatCurrency(liability.balance)}</span>
+                    <span class="text-sm" style="color: var(--color-neutral-600);">{liability.accountName}</span>
+                    <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(liability.balance)}</span>
                   </div>
                 {/each}
-                <div class="flex justify-between pt-2 border-t">
-                  <span class="text-sm font-semibold text-gray-700">Total Non-Current Liabilities</span>
-                  <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalNonCurrentLiabilities)}</span>
+                <div class="flex justify-between pt-2" style="border-top: 1px solid var(--color-neutral-200);">
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Non-Current Liabilities</span>
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalNonCurrentLiabilities)}</span>
                 </div>
               </div>
             {/if}
           </div>
-          
+
           <!-- Total Liabilities -->
-          <div class="py-2 border-t border-b border-gray-300 mb-6">
+          <div class="py-2 mb-6" style="border-top: 1px solid var(--color-neutral-300); border-bottom: 1px solid var(--color-neutral-300);">
             <div class="flex justify-between">
-              <span class="font-bold text-gray-800">TOTAL LIABILITIES</span>
-              <span class="font-bold text-gray-800">{formatCurrency(reportData.totalLiabilities)}</span>
+              <span class="font-bold" style="color: var(--color-neutral-800);">TOTAL LIABILITIES</span>
+              <span class="font-bold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalLiabilities)}</span>
             </div>
           </div>
-          
+
           <!-- Equity Section -->
           <div class="mb-6">
-            <h4 class="text-base font-semibold text-gray-700 mb-3">Equity</h4>
+            <h4 class="text-base font-semibold mb-3" style="color: var(--color-neutral-700);">Equity</h4>
             {#if reportData.equity.length === 0}
-              <p class="text-sm text-gray-500 italic">No equity accounts</p>
+              <p class="text-sm italic" style="color: var(--color-neutral-500);">No equity accounts</p>
             {:else}
               <div class="space-y-2">
                 {#each reportData.equity as equityAccount}
                   <div class="flex justify-between">
-                    <span class="text-sm text-gray-600">{equityAccount.accountName}</span>
-                    <span class="text-sm text-gray-800 font-medium">{formatCurrency(equityAccount.balance)}</span>
+                    <span class="text-sm" style="color: var(--color-neutral-600);">{equityAccount.accountName}</span>
+                    <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(equityAccount.balance)}</span>
                   </div>
                 {/each}
-                <div class="flex justify-between pt-2 border-t">
-                  <span class="text-sm font-semibold text-gray-700">Total Equity</span>
-                  <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalEquity)}</span>
+                <div class="flex justify-between pt-2" style="border-top: 1px solid var(--color-neutral-200);">
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Equity</span>
+                  <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalEquity)}</span>
                 </div>
               </div>
             {/if}
           </div>
-          
+
           <!-- Total Liabilities and Equity -->
-          <div class="py-2 border-t border-b border-gray-300">
+          <div class="py-2" style="border-top: 1px solid var(--color-neutral-300); border-bottom: 1px solid var(--color-neutral-300);">
             <div class="flex justify-between">
-              <span class="font-bold text-gray-800">TOTAL LIABILITIES AND EQUITY</span>
-              <span class="font-bold text-gray-800">{formatCurrency(reportData.totalLiabilitiesAndEquity)}</span>
+              <span class="font-bold" style="color: var(--color-neutral-800);">TOTAL LIABILITIES AND EQUITY</span>
+              <span class="font-bold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalLiabilitiesAndEquity)}</span>
             </div>
           </div>
         </div>

@@ -12,13 +12,6 @@
   let error: string | null = null;
   let reportData: any = null;
   
-  // Tax categories and rates
-  const TAX_CATEGORIES = {
-    OUTPUT_VAT: 'output-vat',
-    INPUT_VAT: 'input-vat',
-    WITHHOLDING_TAX: 'withholding-tax'
-  };
-  
   onMount(() => {
     // Format dates to first and last day of the month
     startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
@@ -286,162 +279,146 @@
   <div slot="report-content">
     {#if !reportData}
       <div class="text-center py-10">
-        <p class="text-gray-600">No tax data available for the selected period.</p>
+        <p class="text-sm" style="color: var(--color-neutral-600);">No tax data available for the selected period.</p>
       </div>
     {:else}
       <!-- Monthly Summary Section -->
-      <div class="bg-white rounded-lg shadow mb-8">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-800">Monthly Tax Summary</h3>
-        </div>
-        <div class="p-6">
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
+      <div class="mb-8">
+        <h3 class="text-lg font-semibold mb-3 pb-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-200);">Monthly Tax Summary</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Month</th>
+                <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Output VAT</th>
+                <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Input VAT</th>
+                <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Net VAT Payable</th>
+                <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Withholding Tax</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each reportData.monthlySummaries as month}
                 <tr>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
-                  <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Output VAT</th>
-                  <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Input VAT</th>
-                  <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net VAT Payable</th>
-                  <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Withholding Tax</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                {#each reportData.monthlySummaries as month}
-                  <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{month.monthName} {month.year}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(month.outputVat)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(month.inputVat)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right {month.netVatPayable >= 0 ? 'text-red-600' : 'text-green-600'}">
-                      {formatCurrency(month.netVatPayable)}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(month.withholdingTax)}</td>
-                  </tr>
-                {/each}
-                <tr class="bg-gray-50 font-semibold">
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">TOTAL</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(reportData.totalOutputVat)}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(reportData.totalInputVat)}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right {reportData.netVatPayable >= 0 ? 'text-red-600' : 'text-green-600'}">
-                    {formatCurrency(reportData.netVatPayable)}
+                  <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{month.monthName} {month.year}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(month.outputVat)}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(month.inputVat)}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right" style="color: {month.netVatPayable >= 0 ? 'var(--color-error-600)' : 'var(--color-success-600)'}; border-bottom: 1px solid var(--color-neutral-100);">
+                    {formatCurrency(month.netVatPayable)}
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(reportData.totalWithholdingTax)}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(month.withholdingTax)}</td>
                 </tr>
-              </tbody>
-            </table>
-          </div>
+              {/each}
+              <tr class="font-semibold" style="background: var(--color-neutral-50);">
+                <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800);">TOTAL</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalOutputVat)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalInputVat)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right" style="color: {reportData.netVatPayable >= 0 ? 'var(--color-error-600)' : 'var(--color-success-600)'};">
+                  {formatCurrency(reportData.netVatPayable)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalWithholdingTax)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
-      
+
       <!-- Output VAT Detail Section -->
-      <div class="bg-white rounded-lg shadow mb-8">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-800">Output VAT Detail</h3>
-        </div>
-        <div class="p-6">
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
+      <div class="mb-8">
+        <h3 class="text-lg font-semibold mb-3 pb-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-200);">Output VAT Detail</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Date</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Reference</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+                <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each reportData.outputVat as entry}
                 <tr>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                  <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.date.toLocaleDateString()}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.reference}</td>
+                  <td class="px-6 py-4 text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.description}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
+                    {formatCurrency(entry.isDebit ? -entry.amount : entry.amount)}
+                  </td>
+                </tr>
+              {/each}
+              <tr class="font-semibold" style="background: var(--color-neutral-50);">
+                <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800);" colspan="3">TOTAL</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalOutputVat)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Input VAT Detail Section -->
+      <div class="mb-8">
+        <h3 class="text-lg font-semibold mb-3 pb-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-200);">Input VAT Detail</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Date</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Reference</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+                <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each reportData.inputVat as entry}
+                <tr>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.date.toLocaleDateString()}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.reference}</td>
+                  <td class="px-6 py-4 text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.description}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
+                    {formatCurrency(entry.isDebit ? entry.amount : -entry.amount)}
+                  </td>
+                </tr>
+              {/each}
+              <tr class="font-semibold" style="background: var(--color-neutral-50);">
+                <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800);" colspan="3">TOTAL</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalInputVat)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Withholding Tax Detail Section -->
+      {#if reportData.withholdingTax.length > 0}
+        <div class="mb-8">
+          <h3 class="text-lg font-semibold mb-3 pb-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-200);">Withholding Tax Detail</h3>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Date</th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Reference</th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+                  <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Amount</th>
                 </tr>
               </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                {#each reportData.outputVat as entry}
+              <tbody>
+                {#each reportData.withholdingTax as entry}
                   <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.date.toLocaleDateString()}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.reference}</td>
-                    <td class="px-6 py-4 text-sm text-gray-900">{entry.description}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.date.toLocaleDateString()}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.reference}</td>
+                    <td class="px-6 py-4 text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{entry.description}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                       {formatCurrency(entry.isDebit ? -entry.amount : entry.amount)}
                     </td>
                   </tr>
                 {/each}
-                <tr class="bg-gray-50 font-semibold">
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">TOTAL</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(reportData.totalOutputVat)}</td>
+                <tr class="font-semibold" style="background: var(--color-neutral-50);">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800);" colspan="3">TOTAL</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalWithholdingTax)}</td>
                 </tr>
               </tbody>
             </table>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Input VAT Detail Section -->
-      <div class="bg-white rounded-lg shadow mb-8">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-800">Input VAT Detail</h3>
-        </div>
-        <div class="p-6">
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                  <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                {#each reportData.inputVat as entry}
-                  <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.date.toLocaleDateString()}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.reference}</td>
-                    <td class="px-6 py-4 text-sm text-gray-900">{entry.description}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                      {formatCurrency(entry.isDebit ? entry.amount : -entry.amount)}
-                    </td>
-                  </tr>
-                {/each}
-                <tr class="bg-gray-50 font-semibold">
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">TOTAL</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(reportData.totalInputVat)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Withholding Tax Detail Section -->
-      {#if reportData.withholdingTax.length > 0}
-        <div class="bg-white rounded-lg shadow mb-8">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-800">Withholding Tax Detail</h3>
-          </div>
-          <div class="p-6">
-            <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                  <tr>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                  </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                  {#each reportData.withholdingTax as entry}
-                    <tr>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.date.toLocaleDateString()}</td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.reference}</td>
-                      <td class="px-6 py-4 text-sm text-gray-900">{entry.description}</td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                        {formatCurrency(entry.isDebit ? -entry.amount : entry.amount)}
-                      </td>
-                    </tr>
-                  {/each}
-                  <tr class="bg-gray-50 font-semibold">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">TOTAL</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{formatCurrency(reportData.totalWithholdingTax)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </div>
         </div>
       {/if}

@@ -25,26 +25,56 @@
 </script>
 
 <div class="w-full">
-  <table class="w-full text-sm border-collapse">
+  <table class="w-full text-sm border-collapse" style="table-layout: fixed;">
     <thead>
-      <tr class="bg-gray-100 text-gray-600">
+      <tr>
         {#each columns as col, colIndex}
-          <th class="py-2 font-semibold tracking-wide border-b border-gray-200 text-left" style="width: {col.key === 'item' ? '25%' : col.key === 'description' ? '30%' : col.width || 'auto'}; padding: 0.25rem;">
+          <th
+            class="py-2 font-medium text-xs uppercase tracking-wide text-left truncate"
+            style="width: {col.width || 'auto'}; padding: 0.4rem 0.5rem; color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);"
+          >
             {col.label}
           </th>
         {/each}
         {#if editable}
-          <th class="py-2 border-b border-gray-200 w-10 text-center"></th>
+          <th class="py-2 w-10 text-center" style="border-bottom: 1px solid var(--color-neutral-200);"></th>
         {/if}
       </tr>
     </thead>
     <tbody>
       {#each rows as row, idx}
-        <tr class="hover:bg-blue-50/30">
+        <tr class="transition-colors hover:[background:var(--color-primary-50)]">
           {#each columns as col, colIndex}
-            <td class="align-middle border-b border-gray-100" style="padding: 0.25rem 0.5rem;">
-              {#if editable && col.type === 'select'}
-                <select class="w-full bg-transparent text-gray-700 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 px-2 py-1.5 text-sm" bind:value={(row as Record<string, any>)[col.key]} on:change={(e) => onUpdate(idx, col.key, (e.target as HTMLSelectElement).value)}>
+            <td class="align-middle" style="padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--color-neutral-100); overflow-wrap: anywhere;">
+              {#if editable && col.key === 'amount'}
+                <div class="w-full text-right">
+                  <input
+                    class="w-full bg-transparent text-right font-mono rounded-md py-1.5 px-2 text-sm border focus:outline-none focus:ring-1"
+                    style="color: var(--color-neutral-800); border-color: var(--color-neutral-200); --tw-ring-color: var(--color-primary-400);"
+                    type="text"
+                    placeholder="0.00"
+                    value={new Intl.NumberFormat('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    }).format(Number((row as Record<string, any>)[col.key] || 0))}
+                    on:blur={(e) => {
+                      const value = parseFloat((e.target as HTMLInputElement).value.replace(/,/g, '')) || 0;
+                      onUpdate(idx, col.key, value);
+                    }}
+                    on:focus={(e) => {
+                      // Remove formatting on focus for easier editing
+                      const value = parseFloat((e.target as HTMLInputElement).value.replace(/,/g, '')) || 0;
+                      (e.target as HTMLInputElement).value = value.toString();
+                    }}
+                  >
+                </div>
+              {:else if editable && col.type === 'select'}
+                <select
+                  class="w-full bg-transparent rounded-md px-2 py-1.5 text-sm border focus:outline-none focus:ring-1"
+                  style="color: var(--color-neutral-700); border-color: var(--color-neutral-200); --tw-ring-color: var(--color-primary-400);"
+                  bind:value={(row as Record<string, any>)[col.key]}
+                  on:change={(e) => onUpdate(idx, col.key, (e.target as HTMLSelectElement).value)}
+                >
                   <!-- Do not force a disabled placeholder so that a valid empty option like 'N/A' can be selected -->
                   {#if typeof (col as any).options === 'function'}
                     <!-- Handle function-based options (like getEntityOptions) -->
@@ -64,41 +94,56 @@
                   {/if}
                 </select>
               {:else if editable && col.type === 'number'}
-                <input class="w-full text-center bg-transparent text-gray-700 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 py-1.5 text-sm" 
-                       type="number" 
-                       step="any" 
-                       placeholder="0" 
-                       bind:value={(row as Record<string, any>)[col.key]} 
-                       on:input={(e) => onUpdate(idx, col.key, parseFloat((e.target as HTMLInputElement).value) || 0)}>
+                <input
+                  class="w-full text-center bg-transparent rounded-md py-1.5 text-sm border focus:outline-none focus:ring-1"
+                  style="color: var(--color-neutral-700); border-color: var(--color-neutral-200); --tw-ring-color: var(--color-primary-400);"
+                  type="number"
+                  step="any"
+                  placeholder="0"
+                  bind:value={(row as Record<string, any>)[col.key]}
+                  on:input={(e) => onUpdate(idx, col.key, parseFloat((e.target as HTMLInputElement).value) || 0)}
+                >
               {:else if editable && col.type === 'text'}
-                <input class="w-full bg-transparent text-gray-700 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 px-2 py-1.5 text-sm" 
-                       type="text" 
-                       placeholder={col.label} 
-                       bind:value={(row as Record<string, any>)[col.key]} 
-                       on:input={(e) => onUpdate(idx, col.key, (e.target as HTMLInputElement)?.value)}>
+                <input
+                  class="w-full bg-transparent rounded-md px-2 py-1.5 text-sm border focus:outline-none focus:ring-1"
+                  style="color: var(--color-neutral-700); border-color: var(--color-neutral-200); --tw-ring-color: var(--color-primary-400);"
+                  type="text"
+                  placeholder={col.label}
+                  bind:value={(row as Record<string, any>)[col.key]}
+                  on:input={(e) => onUpdate(idx, col.key, (e.target as HTMLInputElement)?.value)}>
               {:else}
-                <!-- Display readable values for reference fields in non-editable mode -->
-                {#if (col as any).displayField && (row as Record<string, any>)[(col as any).displayField]}
+                {#if col.key === 'amount'}
+                  <!-- Format amount in accounting format with proper alignment -->
+                  <div class="text-right w-full">
+                    <span class="font-mono" style="color: var(--color-neutral-800); white-space: nowrap;">
+                      {new Intl.NumberFormat('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                        useGrouping: true
+                      }).format(Number((row as Record<string, any>)[col.key] || 0))}
+                    </span>
+                  </div>
+                {:else if (col as any).displayField && (row as Record<string, any>)[(col as any).displayField]}
                   <!-- If a display field is specified and has a value, use that -->
-                  <span class="text-gray-700">{(row as Record<string, any>)[(col as any).displayField]}</span>
+                  <span style="color: var(--color-neutral-700);">{(row as Record<string, any>)[(col as any).displayField]}</span>
                 {:else if col.key === 'item' && (row as Record<string, any>)['itemName']}
-                  <span class="text-gray-700">{(row as Record<string, any>)['itemName']}</span>
+                  <span style="color: var(--color-neutral-700);">{(row as Record<string, any>)['itemName']}</span>
                 {:else if col.key === 'unit' && (row as Record<string, any>)['unitName']}
-                  <span class="text-gray-700">{(row as Record<string, any>)['unitName']}</span>
+                  <span style="color: var(--color-neutral-700);">{(row as Record<string, any>)['unitName']}</span>
                 {:else if col.key === 'taxType' && (row as Record<string, any>)['taxTypeName']}
-                  <span class="text-gray-700">{(row as Record<string, any>)['taxTypeName']}</span>
+                  <span style="color: var(--color-neutral-700);">{(row as Record<string, any>)['taxTypeName']}</span>
                 {:else if col.key === 'nameId' && (row as Record<string, any>)['nameName']}
                   <!-- Specific fix for entity fields in journal entries -->
-                  <span class="text-gray-700">{(row as Record<string, any>)['nameName']}</span>
+                  <span style="color: var(--color-neutral-700);">{(row as Record<string, any>)['nameName']}</span>
                 {:else}
-                  <span class="text-gray-700">{(row as Record<string, any>)[col.key]}</span>
+                  <span style="color: var(--color-neutral-700);">{(row as Record<string, any>)[col.key]}</span>
                 {/if}
               {/if}
             </td>
           {/each}
           {#if editable}
-            <td class="text-center border-b border-gray-100" style="padding: 0.25rem;">
-              <button class="p-1 hover:text-red-500 text-gray-400 transition-colors" type="button" on:click={() => handleRemove(idx)} aria-label="Delete item">
+            <td class="text-center" style="padding: 0.25rem; border-bottom: 1px solid var(--color-neutral-100);">
+              <button class="p-1 transition-colors" style="color: var(--color-neutral-400);" type="button" on:click={() => handleRemove(idx)} aria-label="Delete item">
                 <iconify-icon icon="material-symbols:delete" width="16" height="16"></iconify-icon>
               </button>
             </td>
@@ -110,7 +155,8 @@
   {#if editable && showAddButton}
     <div class="flex w-full justify-start mt-4">
       <button
-        class="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 transition-colors"
+        class="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-md transition-colors"
+        style="color: var(--color-primary-700); background: var(--color-primary-50);"
         type="button"
         on:click={handleAdd}
         aria-label="Add item"

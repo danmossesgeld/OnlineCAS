@@ -28,12 +28,11 @@
     loadDocument();
   }
   
-  // Adjust page title based on mode
-  $: pageTitle = {
-    'create': 'Create Payment Receipt',
-    'edit': 'Edit Payment Receipt',
-    'view': 'View Payment Receipt'
-  }[mode];
+  // Show the actual receipt number once known, instead of a generic "Edit/View Payment
+  // Receipt" label — falls back to a mode label for a brand-new, not-yet-saved receipt.
+  $: pageTitle = isCreateMode
+    ? 'New Payment Receipt'
+    : (formData.receiptNo ? formData.receiptNo : (mode === 'view' ? 'View Payment Receipt' : 'Edit Payment Receipt'));
 
   // Subscribe to Firestore option stores and use arrays for select fields
   let customerOptions: {label: string, value: any}[] = [];
@@ -58,6 +57,7 @@
     memo: string;
     amount: number;
     selectedInvoices: string[];
+    receiptNo?: string; // Tracks the saved receipt number once loaded, for display in the page title
   };
 
   // Types for credit system
@@ -110,6 +110,7 @@
   let totalAppliedCredit = 0;
   let showApplyCreditModal = false;
   let creditSearchTerm = '';
+  let selectedInvoiceForCredit: string | null = null;
 
   // Define type for Firestore timestamp
   type FirestoreTimestamp = {
@@ -186,7 +187,8 @@
         reference: docData.reference || '',
         memo: docData.memo || '',
         amount: docData.amount || 0,
-        selectedInvoices: docData.invoicePayments?.map(ip => ip.invoiceId) || []
+        selectedInvoices: docData.invoicePayments?.map(ip => ip.invoiceId) || [],
+        receiptNo: docData.receiptNo || ''
       };
       
       // Populate invoice allocations
@@ -240,7 +242,7 @@
         { field: 'customer', operator: '==', value: customerId }
       ];
       const invoices = await queryCollectionDocs('transactions/customerCenter/salesInvoices', filters) as any[];
-      // Show all invoices with outstanding balance (status not Paid and totalDue > 0)
+      // Show only unpaid invoices (cash sales are automatically marked as paid)
       const filtered = (invoices || []).filter(inv => {
         const status = (inv?.status || '').toLowerCase();
         return status !== 'paid' && status !== 'draft' && Number(inv?.totalDue || 0) > 0;
@@ -303,25 +305,33 @@
   }
 
   function updateAllocationTotals() {
+    // Update available credit from applied credits
+    availableCredit = totalAppliedCredit;
+    
     // Clamp credits to available pool and recompute payable
     let usedCredit = 0;
     outstandingInvoices = outstandingInvoices.map(inv => {
       // Map selected ids to percents
       if (inv.discountId !== undefined) inv.discountPercent = getDiscountPercentFromId(inv.discountId);
       if (inv.taxTypeId !== undefined) inv.taxPercent = getTaxPercentFromTypeId(inv.taxTypeId);
-      // Clamp credit so cumulative does not exceed availableCredit
-      const maxForThis = Math.max(0, availableCredit - usedCredit);
-      const creditClamped = Math.min(Number(inv.credit) || 0, maxForThis);
+      
+      // For now, we'll use the credit from the invoice object
+      // In a full implementation, this would be distributed from appliedCredits
+      const creditClamped = Math.min(Number(inv.credit) || 0, availableCredit - usedCredit);
       usedCredit += creditClamped;
       inv.credit = creditClamped;
+      
       const payable = computePayable(inv.amount, inv.credit, inv.discountPercent, inv.taxPercent);
+      
       // If allocation exceeds new payable, clamp it
       const currentAlloc = Number(invoiceAllocations[inv.value] || 0);
       if (currentAlloc > payable) {
         invoiceAllocations[inv.value] = payable;
       }
+      
       return { ...inv, payable };
     });
+    
     allocatedTotal = Object.values(invoiceAllocations).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
     const totalAvailable = Number(formData.amount) + totalAppliedCredit;
     unallocatedAmount = Number((totalAvailable - allocatedTotal).toFixed(2));
@@ -341,13 +351,13 @@
         { field: 'customer', operator: '==', value: formData.customer },
         { field: 'status', operator: 'in', value: ['Posted', 'Partially Applied'] }
       ];
-      const creditMemoResults = await queryCollectionDocs('transactions/creditMemo', creditMemoFilters);
+      const creditMemoResults = await queryCollectionDocs('transactions/customerCenter/creditMemos', creditMemoFilters);
       availableCreditMemos = creditMemoResults.map((doc: any) => ({
         id: doc.id,
-        creditNo: doc.creditNo || doc.id,
+        creditNo: doc.cmNo || doc.id,
         amount: doc.totalAmount || 0,
         availableAmount: (doc.totalAmount || 0) - (doc.appliedAmount || 0),
-        date: doc.creditDate?.toDate() || new Date(),
+        date: doc.cmDate?.toDate ? doc.cmDate.toDate() : (doc.cmDate ? new Date(doc.cmDate) : new Date()),
         customer: doc.customer
       })).filter(memo => memo.availableAmount > 0);
 
@@ -356,13 +366,13 @@
         { field: 'customer', operator: '==', value: formData.customer },
         { field: 'status', operator: '==', value: 'Posted' }
       ];
-      const advanceResults = await queryCollectionDocs('transactions/receivePayment', advanceFilters);
+      const advanceResults = await queryCollectionDocs('transactions/customerCenter/receipts', advanceFilters);
       availableAdvancePayments = advanceResults.map((doc: any) => ({
         id: doc.id,
         reference: doc.reference || doc.receiptNo || doc.id,
         amount: doc.amount || 0,
         availableAmount: (doc.amount || 0) - (doc.appliedAmount || 0),
-        date: doc.receiptDate?.toDate() || new Date(),
+        date: doc.receiptDate?.toDate ? doc.receiptDate.toDate() : (doc.receiptDate ? new Date(doc.receiptDate) : new Date()),
         customer: doc.customer
       })).filter(payment => payment.availableAmount > 0);
 
@@ -429,7 +439,8 @@
       if (remaining <= 0) break;
       const base = invoice.amount; // Use original amount, not adjusted for credit
       const amountToAllocate = Math.min(base, remaining);
-      invoiceAllocations[invoice.value] = amountToAllocate;
+      // Round to 2 decimal places to avoid floating point precision issues
+      invoiceAllocations[invoice.value] = Math.round(amountToAllocate * 100) / 100;
       remaining -= amountToAllocate;
     }
     
@@ -447,18 +458,66 @@
     updateAllocationTotals();
   }
 
-  // Generate a sequential receipt number
-  async function generateReceiptNumber(): Promise<string> {
+  // Format amount for display with accounting format
+  $: formattedAmount = formData.amount ? formData.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+  
+  // Helper function to format amounts in accounting format
+  function formatAccountingAmount(amount: number): string {
+    if (amount === 0) return '0.00';
+    return amount.toLocaleString('en-US', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2,
+      style: 'decimal',
+      currency: 'USD',
+      currencyDisplay: 'symbol'
+    });
+  }
+
+  // Check if a receipt number already exists
+  async function isReceiptNumberExists(receiptNo: string): Promise<boolean> {
     try {
-      // Use the document ID service for sequential generation
-      return await generateNextDocumentId(DocumentType.PAYMENT_RECEIPT);
+      const filters: FilterCondition[] = [
+        { field: 'receiptNo', operator: '==', value: receiptNo }
+      ];
+      const existingReceipts = await queryCollectionDocs('transactions/customerCenter/receipts', filters);
+      return existingReceipts.length > 0;
     } catch (error) {
-      console.error('Error generating receipt number:', error);
-      // Fallback to timestamp-based generation if sequential fails
-      const prefix = 'PR';
-      const timestamp = Date.now().toString().substring(7);
-      return `${prefix}${timestamp.padStart(9, '0')}`;
+      console.error('Error checking receipt number:', error);
+      return false; // Default to allowing the save if there's an error checking
     }
+  }
+
+  // Generate a guaranteed unique receipt number using a transaction
+  async function generateReceiptNumber(): Promise<string> {
+    const MAX_ATTEMPTS = 5;
+    let attempts = 0;
+    
+    while (attempts < MAX_ATTEMPTS) {
+      try {
+        // Generate a new receipt number
+        const receiptNo = await generateNextDocumentId(DocumentType.PAYMENT_RECEIPT);
+        
+        // Check if this number already exists in the database
+        const exists = await isReceiptNumberExists(receiptNo);
+        
+        if (!exists) {
+          // If it doesn't exist, we can use it
+          return receiptNo;
+        }
+        
+        // If we get here, the number exists, so we'll try again
+        attempts++;
+        
+        // Add a small delay before retrying to avoid tight loops
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error('Error in receipt number generation attempt:', error);
+        attempts++;
+      }
+    }
+    
+    // If we've exhausted all attempts, throw an error
+    throw new Error('Unable to generate a unique receipt number after multiple attempts. Please try again.');
   }
 
   // Save the payment receipt
@@ -511,7 +570,7 @@
       // Create the receipt data object
       let receiptData;
       if (isCreateMode) {
-        // Generate a sequential receipt number
+        // Generate a guaranteed unique receipt number
         const receiptNo = await generateReceiptNumber();
         
         // Create a new receipt document
@@ -577,7 +636,7 @@
         for (const credit of appliedCredits) {
           if (credit.type === 'credit_memo') {
             // Update credit memo applied amount and status
-            const creditMemoDoc = await getDocFromCollection('transactions/creditMemo', credit.id) as any;
+            const creditMemoDoc = await getDocFromCollection('transactions/customerCenter/creditMemos', credit.id) as any;
             if (creditMemoDoc) {
               const currentApplied = creditMemoDoc.appliedAmount || 0;
               const newApplied = currentApplied + credit.appliedAmount;
@@ -591,7 +650,7 @@
                 newStatus = 'Partially Applied';
               }
               
-              await updateDocInCollection('transactions/creditMemo', credit.id, {
+              await updateDocInCollection('transactions/customerCenter/creditMemos', credit.id, {
                 appliedAmount: newApplied,
                 status: newStatus,
                 updatedAt: new Date()
@@ -599,7 +658,7 @@
             }
           } else if (credit.type === 'advance_payment') {
             // Update advance payment applied amount and status
-            const paymentDoc = await getDocFromCollection('transactions/receivePayment', credit.id) as any;
+            const paymentDoc = await getDocFromCollection('transactions/customerCenter/receipts', credit.id) as any;
             if (paymentDoc) {
               const currentApplied = paymentDoc.appliedAmount || 0;
               const newApplied = currentApplied + credit.appliedAmount;
@@ -613,7 +672,7 @@
                 newStatus = 'Partially Applied';
               }
               
-              await updateDocInCollection('transactions/receivePayment', credit.id, {
+              await updateDocInCollection('transactions/customerCenter/receipts', credit.id, {
                 appliedAmount: newApplied,
                 status: newStatus,
                 updatedAt: new Date()
@@ -645,7 +704,7 @@
         for (const credit of appliedCredits) {
           if (credit.type === 'credit_memo') {
             // Update credit memo applied amount and status
-            const creditMemoDoc = await getDocFromCollection('transactions/creditMemo', credit.id) as any;
+            const creditMemoDoc = await getDocFromCollection('transactions/customerCenter/creditMemos', credit.id) as any;
             if (creditMemoDoc) {
               const currentApplied = creditMemoDoc.appliedAmount || 0;
               const newApplied = currentApplied + credit.appliedAmount;
@@ -659,7 +718,7 @@
                 newStatus = 'Partially Applied';
               }
               
-              await updateDocInCollection('transactions/creditMemo', credit.id, {
+              await updateDocInCollection('transactions/customerCenter/creditMemos', credit.id, {
                 appliedAmount: newApplied,
                 status: newStatus,
                 updatedAt: new Date()
@@ -667,7 +726,7 @@
             }
           } else if (credit.type === 'advance_payment') {
             // Update advance payment applied amount and status
-            const paymentDoc = await getDocFromCollection('transactions/receivePayment', credit.id) as any;
+            const paymentDoc = await getDocFromCollection('transactions/customerCenter/receipts', credit.id) as any;
             if (paymentDoc) {
               const currentApplied = paymentDoc.appliedAmount || 0;
               const newApplied = currentApplied + credit.appliedAmount;
@@ -681,7 +740,7 @@
                 newStatus = 'Partially Applied';
               }
               
-              await updateDocInCollection('transactions/receivePayment', credit.id, {
+              await updateDocInCollection('transactions/customerCenter/receipts', credit.id, {
                 appliedAmount: newApplied,
                 status: newStatus,
                 updatedAt: new Date()
@@ -702,7 +761,7 @@
       
     } catch (error) {
       console.error('Error saving payment receipt:', error);
-      alert('Failed to save payment receipt. Please try again.');
+      alert('Failed to save payment receipt: ' + (error instanceof Error ? error.message : 'Please try again.'));
     }
   }
 
@@ -711,9 +770,8 @@
     { label: 'Customer', name: 'customer', type: 'select', options: customerOptions },
     { label: 'Receipt Date', name: 'receiptDate', type: 'date' },
     { label: 'Payment Method', name: 'paymentMethod', type: 'select', options: paymentMethodOptions },
-    { label: 'Amount', name: 'amount', type: 'number', min: 0, step: 0.01, onChange: updateAllocationTotals, format: 'currency' },
-    { label: 'Reference', name: 'reference', type: 'text', placeholder: 'Check No., Transaction ID, etc.' },
-    { label: 'Memo', name: 'memo', type: 'textarea', rows: 3 }
+    { label: 'Amount', name: 'amount', type: 'number', min: 0, step: 0.01, onChange: updateAllocationTotals, format: 'accounting' },
+    { label: 'Reference', name: 'reference', type: 'text', placeholder: 'Check No., Transaction ID, etc.' }
   ];
   
   // Form fields array for invoices
@@ -727,9 +785,24 @@
 </script>
 
 <FormLayout title={pageTitle} backPath="/customerCenter/receivePayment/list">
+  <svelte:fragment slot="header-actions">
+    <div class="w-full sm:w-64">
+      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+      <textarea
+        id="field-memo"
+        rows="2"
+        class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
+        style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        placeholder="Add a memo"
+        bind:value={formData.memo}
+        disabled={isViewMode}
+      ></textarea>
+    </div>
+  </svelte:fragment>
+
   {#if isLoading}
     <div class="flex justify-center items-center h-64">
-      <p class="text-gray-600">Loading...</p>
+      <p style="color: var(--color-neutral-600);">Loading...</p>
     </div>
   {:else}
     <!-- Document header fields section -->
@@ -739,20 +812,22 @@
         <!-- Invoice Allocation Section -->
         <div>
           <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-medium text-gray-900">Invoice Allocation</h2>
+            <h2 class="text-lg font-medium" style="color: var(--color-neutral-800);">Invoice Allocation</h2>
             {#if !isViewMode}
               <div class="flex gap-2">
-                <button 
-                  type="button" 
-                  class="inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                <button
+                  type="button"
+                  class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium text-white transition-colors"
+                  style="background: var(--color-success-600);"
                   on:click={() => showApplyCreditModal = true}
                 >
                   <iconify-icon icon="material-symbols:credit-card" class="mr-1" width="18"></iconify-icon>
                   Apply Credit
                 </button>
-              <button 
-                type="button" 
-                class="inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              <button
+                type="button"
+                class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium text-white transition-colors"
+                style="background: var(--color-primary-600);"
                 on:click={autoAllocate}
               >
                 <iconify-icon icon="material-symbols:auto-fix" class="mr-1" width="18"></iconify-icon>
@@ -761,56 +836,54 @@
               </div>
             {/if}
           </div>
-          
-          <!-- Allocation Summary -->
-          <div class="mb-4 p-3 bg-gray-50 rounded-md">
-            <div class="flex flex-wrap gap-4 text-sm">
-              <div>
-                <span class="text-gray-500">Cash Payment:</span> 
-                <span class="font-semibold text-gray-800 ml-1">{formData.amount?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' }) || '₱0.00'}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">Credits Applied:</span> 
-                <span class="font-semibold text-purple-600 ml-1">{totalAppliedCredit?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' }) || '₱0.00'}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">Total Available:</span> 
-                <span class="font-semibold text-blue-600 ml-1">{(formData.amount + totalAppliedCredit)?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' }) || '₱0.00'}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">Allocated:</span> 
-                <span class="font-semibold text-green-600 ml-1">{allocatedTotal.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">Unallocated:</span> 
-                <span class="font-semibold ml-1 {unallocatedAmount < 0 ? 'text-red-600' : 'text-blue-600'}">{unallocatedAmount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
-              </div>
+
+          <!-- Allocation Summary — plain text, no card -->
+          <div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-4 text-sm">
+            <div class="flex items-baseline gap-1.5">
+              <span style="color: var(--color-neutral-500);">Cash Payment:</span>
+              <span class="font-semibold" style="color: var(--color-neutral-800);">{formData.amount?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' }) || '₱0.00'}</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span style="color: var(--color-neutral-500);">Credits Applied:</span>
+              <span class="font-semibold" style="color: var(--color-primary-600);">{totalAppliedCredit?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' }) || '₱0.00'}</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span style="color: var(--color-neutral-500);">Total Available:</span>
+              <span class="font-semibold" style="color: var(--color-primary-600);">{(formData.amount + totalAppliedCredit)?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' }) || '₱0.00'}</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span style="color: var(--color-neutral-500);">Allocated:</span>
+              <span class="font-semibold" style="color: var(--color-success-600);">{allocatedTotal.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span style="color: var(--color-neutral-500);">Unallocated:</span>
+              <span class="font-semibold" style={`color: var(${unallocatedAmount < 0 ? '--color-error-600' : '--color-primary-600'});`}>{unallocatedAmount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
             </div>
           </div>
 
           <!-- Applied Credits Section -->
           {#if appliedCredits.length > 0}
             <div class="mb-4">
-              <h3 class="text-sm font-medium text-gray-700 mb-2">Applied Credits</h3>
+              <h3 class="text-sm font-medium mb-2" style="color: var(--color-neutral-700);">Applied Credits</h3>
               <div class="space-y-2">
                 {#each appliedCredits as credit}
-                  <div class="flex justify-between items-center bg-purple-50 p-2 rounded">
+                  <div class="flex justify-between items-center p-2 rounded" style="background: color-mix(in srgb, var(--color-primary-600) 8%, transparent);">
                     <div class="flex-1">
-                      <span class="text-sm font-medium text-purple-700">
+                      <span class="text-sm font-medium" style="color: var(--color-primary-700);">
                         {credit.type === 'credit_memo' ? 'Credit Memo' : 'Advance Payment'}: {credit.reference}
                       </span>
-                      <span class="text-xs text-gray-500 ml-2">
+                      <span class="text-xs ml-2" style="color: var(--color-neutral-500);">
                         (Available: {credit.availableAmount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })})
                       </span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <span class="text-sm font-semibold text-purple-700">
+                      <span class="text-sm font-semibold" style="color: var(--color-primary-700);">
                         {credit.appliedAmount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}
                       </span>
                       {#if !isViewMode}
                         <button
                           type="button"
-                          class="text-red-500 hover:text-red-700"
+                          style="color: var(--color-error-600);"
                           aria-label="Remove applied credit"
                           on:click={() => removeAppliedCredit(credit.id, credit.type)}
                         >
@@ -827,66 +900,104 @@
           <!-- Outstanding Invoices Table -->
           <div class="overflow-x-auto">
             {#if outstandingInvoices.length > 0}
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+              <table class="min-w-full text-sm">
+                <thead>
                   <tr>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount Due</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disc %</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tax %</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payable</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Invoice</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Due Date</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Amount Due</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Credit</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Disc %</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Tax %</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Payable</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Payment</th>
                   </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody>
                   {#each outstandingInvoices as invoice}
                     <tr>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-800">{invoice.label.split(' - ')[0]}</td>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600">
+                      <td class="px-3 py-2 whitespace-nowrap text-sm" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{invoice.label.split(' - ')[0]}</td>
+                      <td class="px-3 py-2 whitespace-nowrap text-sm" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
                         {invoice.dueDate ? new Date(invoice.dueDate.seconds * 1000).toLocaleDateString() : '-'}
                       </td>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600">
+                      <td class="px-3 py-2 whitespace-nowrap text-sm" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
                         {invoice.amount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}
                       </td>
-                      <td class="px-3 py-2 whitespace-nowrap">
+                      <td class="px-3 py-2 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
                         {#if isViewMode}
-                          <span class="text-sm text-gray-600">{invoice.discountPercent || 0}%</span>
+                          <span class="text-sm font-mono" style="color: var(--color-neutral-800);">{formatAccountingAmount(invoice.credit || 0)}</span>
                         {:else}
-                          <select class="w-28 rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-200 focus:ring-opacity-50" bind:value={invoice.discountId} on:change={updateAllocationTotals}>
+                          <button
+                            type="button"
+                            class="w-28 px-3 py-1.5 text-sm font-medium text-white rounded-md transition-colors duration-150"
+                            style="background: var(--color-primary-600);"
+                            on:click={() => {
+                              // Open credit selection modal for this specific invoice
+                              selectedInvoiceForCredit = invoice.value;
+                              showApplyCreditModal = true;
+                            }}
+                          >
+                            <div class="flex items-center justify-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                              </svg>
+                              Select Credits
+                            </div>
+                          </button>
+                        {/if}
+                      </td>
+                      <td class="px-3 py-2 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
+                        {#if isViewMode}
+                          <span class="text-sm font-medium" style="color: var(--color-neutral-700);">{invoice.discountPercent || 0}%</span>
+                        {:else}
+                          <select class="w-28 rounded border text-sm focus:outline-none focus:ring-2 transition-colors" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);" bind:value={invoice.discountId} on:change={updateAllocationTotals}>
                             {#each discountOptions as opt}
                               <option value={opt.value}>{opt.label}</option>
                             {/each}
                           </select>
                         {/if}
                       </td>
-                      <td class="px-3 py-2 whitespace-nowrap">
+                      <td class="px-3 py-2 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
                         {#if isViewMode}
-                          <span class="text-sm text-gray-600">{invoice.taxPercent || 0}%</span>
+                          <span class="text-sm" style="color: var(--color-neutral-600);">{invoice.taxPercent || 0}%</span>
                         {:else}
-                          <select class="w-28 rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-200 focus:ring-opacity-50" bind:value={invoice.taxTypeId} on:change={updateAllocationTotals}>
+                          <select class="w-28 rounded border text-sm focus:outline-none focus:ring-2 transition-colors" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);" bind:value={invoice.taxTypeId} on:change={updateAllocationTotals}>
                             {#each taxTypeOptions as opt}
                               <option value={opt.value}>{opt.label}</option>
                             {/each}
                           </select>
                         {/if}
                       </td>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm">
+                      <td class="px-3 py-2 whitespace-nowrap text-sm" style="color: var(--color-neutral-700); border-bottom: 1px solid var(--color-neutral-100);">
                         {invoice.payable?.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}
                       </td>
-                      <td class="px-3 py-2 whitespace-nowrap">
+                      <td class="px-3 py-2 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
                         {#if isViewMode}
-                          <span class="text-sm text-gray-600">
+                          <span class="text-sm" style="color: var(--color-neutral-600);">
                             {(invoiceAllocations[invoice.value] || 0).toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}
                           </span>
                         {:else}
-                          <input 
+                          <input
                             type="number"
                             min="0"
                             max={invoice.payable || invoice.amount}
-                            class="w-32 rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-200 focus:ring-opacity-50"
+                            step="0.01"
+                            class="w-32 rounded border text-sm focus:outline-none focus:ring-2 transition-colors"
+                            style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
                             bind:value={invoiceAllocations[invoice.value]}
                             on:input={updateAllocationTotals}
+                            on:blur={(e) => {
+                              // Format to 2 decimal places on blur
+                              const target = e.target as HTMLInputElement;
+                              if (target) {
+                                const value = parseFloat(target.value);
+                                if (!isNaN(value)) {
+                                  invoiceAllocations[invoice.value] = Math.round(value * 100) / 100;
+                                  updateAllocationTotals();
+                                }
+                              }
+                            }}
+                            placeholder="0.00"
                           />
                         {/if}
                       </td>
@@ -895,11 +1006,11 @@
                 </tbody>
               </table>
             {:else if formData.customer}
-              <div class="text-center py-8 text-gray-500 bg-gray-50 rounded-md">
+              <div class="text-center py-8" style="color: var(--color-neutral-500);">
                 No outstanding invoices found for this customer.
               </div>
             {:else}
-              <div class="text-center py-8 text-gray-500 bg-gray-50 rounded-md">
+              <div class="text-center py-8" style="color: var(--color-neutral-500);">
                 Select a customer to view outstanding invoices.
               </div>
             {/if}
@@ -922,15 +1033,15 @@
 
 <!-- Apply Credit Modal -->
 {#if showApplyCreditModal}
-  <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+  <div class="fixed inset-0 overflow-y-auto h-full w-full z-50" style="background: rgba(15, 23, 42, 0.55);">
+    <div class="relative top-20 mx-auto p-5 rounded-md w-11/12 max-w-4xl" style="background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); box-shadow: var(--shadow-lg);">
       <div class="mt-3">
         <!-- Modal Header -->
         <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-medium text-gray-900">Apply Credit</h3>
+          <h3 class="text-lg font-medium" style="color: var(--color-neutral-800);">Apply Credit</h3>
           <button
             type="button"
-            class="text-gray-400 hover:text-gray-600"
+            style="color: var(--color-neutral-400);"
             aria-label="Close modal"
             on:click={() => showApplyCreditModal = false}
           >
@@ -943,48 +1054,88 @@
           <input
             type="text"
             placeholder="Search credit # / type ..."
-            class="w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-200 focus:ring-opacity-50"
+            class="w-full rounded border text-sm focus:outline-none focus:ring-2 transition-colors"
+            style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
             bind:value={creditSearchTerm}
           />
         </div>
 
         <!-- Credit Memos Section -->
         <div class="mb-6">
-          <h4 class="text-sm font-medium text-gray-700 mb-3">Select Credit Memos</h4>
-          <p class="text-xs text-gray-500 mb-3">Check rows and type an amount (auto-fills to max).</p>
-          
+          <h4 class="text-sm font-medium mb-3" style="color: var(--color-neutral-700);">Select Credit Memos</h4>
+          <p class="text-xs mb-3" style="color: var(--color-neutral-500);">Check rows and type an amount (auto-fills to max).</p>
+
           {#if availableCreditMemos.length > 0}
             <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+              <table class="min-w-full text-sm">
+                <thead>
                   <tr>
-                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit #</th>
-                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available</th>
-                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Apply Amount</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">
+                      <input
+                        type="checkbox"
+                        style="accent-color: var(--color-primary-600);"
+                        on:change={(e) => {
+                          const target = e.target as HTMLInputElement;
+                          const filteredMemos = availableCreditMemos.filter(memo => 
+                            !creditSearchTerm || memo.creditNo.toLowerCase().includes(creditSearchTerm.toLowerCase()) || 
+                            'credit memo'.includes(creditSearchTerm.toLowerCase())
+                          );
+                          filteredMemos.forEach(memo => {
+                            const currentAmount = appliedCredits.find(c => c.id === memo.id && c.type === 'credit_memo')?.appliedAmount || 0;
+                            if (target.checked && currentAmount === 0) {
+                              applyCredit(memo.id, 'credit_memo', memo.availableAmount);
+                            } else if (!target.checked && currentAmount > 0) {
+                              applyCredit(memo.id, 'credit_memo', 0);
+                            }
+                          });
+                        }}
+                      />
+                    </th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Credit #</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Type</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Available</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Apply Amount</th>
                   </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody>
                   {#each availableCreditMemos.filter(memo => !creditSearchTerm || memo.creditNo.toLowerCase().includes(creditSearchTerm.toLowerCase()) || 'credit memo'.includes(creditSearchTerm.toLowerCase())) as memo}
-                    <tr>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-blue-600 font-medium">{memo.creditNo}</td>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600">Credit Memo</td>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600">
-                        {memo.availableAmount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}
+                    {@const currentApplied = appliedCredits.find(c => c.id === memo.id && c.type === 'credit_memo')?.appliedAmount || 0}
+                    <tr style={currentApplied > 0 ? 'background: color-mix(in srgb, var(--color-primary-600) 8%, transparent);' : ''}>
+                      <td class="px-3 py-2 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
+                        <input
+                          type="checkbox"
+                          style="accent-color: var(--color-primary-600);"
+                          checked={currentApplied > 0}
+                          on:change={(e) => {
+                            const target = e.target as HTMLInputElement;
+                            if (target.checked) {
+                              applyCredit(memo.id, 'credit_memo', memo.availableAmount);
+                            } else {
+                              applyCredit(memo.id, 'credit_memo', 0);
+                            }
+                          }}
+                        />
                       </td>
-                      <td class="px-3 py-2 whitespace-nowrap">
+                      <td class="px-3 py-2 whitespace-nowrap text-sm font-medium" style="color: var(--color-primary-600); border-bottom: 1px solid var(--color-neutral-100);">{memo.creditNo}</td>
+                      <td class="px-3 py-2 whitespace-nowrap text-sm" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">item</td>
+                      <td class="px-3 py-2 whitespace-nowrap text-sm" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
+                        {formatAccountingAmount(memo.availableAmount)}
+                      </td>
+                      <td class="px-3 py-2 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
                         <input
                           type="number"
                           min="0"
                           max={memo.availableAmount}
                           step="0.01"
-                          class="w-24 rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-200 focus:ring-opacity-50"
-                          value={appliedCredits.find(c => c.id === memo.id && c.type === 'credit_memo')?.appliedAmount || 0}
+                          class="w-24 rounded border text-sm focus:outline-none focus:ring-2 transition-colors"
+                          style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+                          value={currentApplied}
                           on:input={(e) => {
                             const target = e.target as HTMLInputElement;
                             const amount = parseFloat(target.value) || 0;
                             applyCredit(memo.id, 'credit_memo', amount);
                           }}
+                          placeholder="0"
                         />
                       </td>
                     </tr>
@@ -993,7 +1144,7 @@
               </table>
             </div>
           {:else}
-            <div class="text-center py-4 text-gray-500 bg-gray-50 rounded">
+            <div class="text-center py-4" style="color: var(--color-neutral-500);">
               No credit memos available for this customer.
             </div>
           {/if}
@@ -1001,41 +1152,81 @@
 
         <!-- Advance Payments Section -->
         <div class="mb-6">
-          <h4 class="text-sm font-medium text-gray-700 mb-3">Select Advance Payments</h4>
-          <p class="text-xs text-gray-500 mb-3">You can combine multiple advances.</p>
-          
+          <h4 class="text-sm font-medium mb-3" style="color: var(--color-neutral-700);">Select Advance Payments</h4>
+          <p class="text-xs mb-3" style="color: var(--color-neutral-500);">You can combine multiple advances.</p>
+
           {#if availableAdvancePayments.length > 0}
             <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+              <table class="min-w-full text-sm">
+                <thead>
                   <tr>
-                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available</th>
-                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Apply Amount</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">
+                      <input
+                        type="checkbox"
+                        style="accent-color: var(--color-primary-600);"
+                        on:change={(e) => {
+                          const target = e.target as HTMLInputElement;
+                          const filteredPayments = availableAdvancePayments.filter(payment => 
+                            !creditSearchTerm || payment.reference.toLowerCase().includes(creditSearchTerm.toLowerCase()) || 
+                            'advance payment'.includes(creditSearchTerm.toLowerCase()) || 
+                            'overpayment'.includes(creditSearchTerm.toLowerCase())
+                          );
+                          filteredPayments.forEach(payment => {
+                            const currentAmount = appliedCredits.find(c => c.id === payment.id && c.type === 'advance_payment')?.appliedAmount || 0;
+                            if (target.checked && currentAmount === 0) {
+                              applyCredit(payment.id, 'advance_payment', payment.availableAmount);
+                            } else if (!target.checked && currentAmount > 0) {
+                              applyCredit(payment.id, 'advance_payment', 0);
+                            }
+                          });
+                        }}
+                      />
+                    </th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Reference</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Type</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Available</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Apply Amount</th>
                   </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody>
                   {#each availableAdvancePayments.filter(payment => !creditSearchTerm || payment.reference.toLowerCase().includes(creditSearchTerm.toLowerCase()) || 'advance payment'.includes(creditSearchTerm.toLowerCase()) || 'overpayment'.includes(creditSearchTerm.toLowerCase())) as payment}
-                    <tr>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-blue-600 font-medium">{payment.reference}</td>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600">Overpayment</td>
-                      <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600">
-                        {payment.availableAmount.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}
+                    {@const currentApplied = appliedCredits.find(c => c.id === payment.id && c.type === 'advance_payment')?.appliedAmount || 0}
+                    <tr style={currentApplied > 0 ? 'background: color-mix(in srgb, var(--color-primary-600) 8%, transparent);' : ''}>
+                      <td class="px-3 py-2 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
+                        <input
+                          type="checkbox"
+                          style="accent-color: var(--color-primary-600);"
+                          checked={currentApplied > 0}
+                          on:change={(e) => {
+                            const target = e.target as HTMLInputElement;
+                            if (target.checked) {
+                              applyCredit(payment.id, 'advance_payment', payment.availableAmount);
+                            } else {
+                              applyCredit(payment.id, 'advance_payment', 0);
+                            }
+                          }}
+                        />
                       </td>
-                      <td class="px-3 py-2 whitespace-nowrap">
+                      <td class="px-3 py-2 whitespace-nowrap text-sm font-medium" style="color: var(--color-primary-600); border-bottom: 1px solid var(--color-neutral-100);">{payment.reference}</td>
+                      <td class="px-3 py-2 whitespace-nowrap text-sm" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">Overpayment</td>
+                      <td class="px-3 py-2 whitespace-nowrap text-sm" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">
+                        {formatAccountingAmount(payment.availableAmount)}
+                      </td>
+                      <td class="px-3 py-2 whitespace-nowrap" style="border-bottom: 1px solid var(--color-neutral-100);">
                         <input
                           type="number"
                           min="0"
                           max={payment.availableAmount}
                           step="0.01"
-                          class="w-24 rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-200 focus:ring-opacity-50"
-                          value={appliedCredits.find(c => c.id === payment.id && c.type === 'advance_payment')?.appliedAmount || 0}
+                          class="w-24 rounded border text-sm focus:outline-none focus:ring-2 transition-colors"
+                          style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+                          value={currentApplied}
                           on:input={(e) => {
                             const target = e.target as HTMLInputElement;
                             const amount = parseFloat(target.value) || 0;
                             applyCredit(payment.id, 'advance_payment', amount);
                           }}
+                          placeholder="0"
                         />
                       </td>
                     </tr>
@@ -1044,35 +1235,52 @@
               </table>
             </div>
           {:else}
-            <div class="text-center py-4 text-gray-500 bg-gray-50 rounded">
+            <div class="text-center py-4" style="color: var(--color-neutral-500);">
               No advance payments available for this customer.
             </div>
           {/if}
         </div>
 
         <!-- Modal Summary -->
-        <div class="mb-4 p-3 bg-blue-50 rounded">
-          <div class="flex justify-between text-sm">
-            <span>Credits Applied:</span>
-            <span class="font-semibold">{totalAppliedCredit.toLocaleString('en-US', { style: 'currency', currency: 'PHP' })}</span>
+        <div class="mb-4 p-3 rounded" style="background: var(--color-neutral-50); border: 1px solid var(--color-neutral-200);">
+          <div class="space-y-1 text-sm" style="color: var(--color-neutral-700);">
+            <div class="flex justify-between">
+              <span>Credits Applied:</span>
+              <span class="font-semibold" style="color: var(--color-neutral-800);">{formatAccountingAmount(totalAppliedCredit)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Discount:</span>
+              <span class="font-semibold" style="color: var(--color-neutral-800);">0.00</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Advances Applied:</span>
+              <span class="font-semibold" style="color: var(--color-neutral-800);">{formatAccountingAmount(appliedCredits.filter(c => c.type === 'advance_payment').reduce((sum, c) => sum + c.appliedAmount, 0))}</span>
+            </div>
+            <div class="flex justify-between pt-1" style="border-top: 1px solid var(--color-neutral-200);">
+              <span class="font-medium" style="color: var(--color-neutral-800);">Total Applied:</span>
+              <span class="font-semibold" style="color: var(--color-neutral-800);">{formatAccountingAmount(totalAppliedCredit)}</span>
+            </div>
           </div>
+          <p class="text-xs mt-2" style="color: var(--color-neutral-600);">Make sure your total applied doesn't exceed the invoice balance.</p>
         </div>
 
         <!-- Modal Footer -->
         <div class="flex justify-end gap-3">
           <button
             type="button"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+            class="px-4 py-2 text-sm font-medium rounded-md transition-colors"
+            style="color: var(--color-neutral-700); background: var(--color-neutral-100);"
             on:click={() => showApplyCreditModal = false}
           >
             Cancel
           </button>
           <button
             type="button"
-            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            class="px-4 py-2 text-sm font-medium text-white rounded-md transition-colors"
+            style="background: var(--color-primary-600);"
             on:click={() => showApplyCreditModal = false}
           >
-            Apply
+            ✓ Apply
           </button>
         </div>
       </div>

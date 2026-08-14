@@ -23,12 +23,11 @@
     loadDocument();
   }
   
-  // Adjust page title based on mode
-  $: pageTitle = {
-    'create': 'Create Invoice',
-    'edit': 'Edit Invoice',
-    'view': 'View Invoice'
-  }[mode];
+  // Show the actual invoice number once known, instead of a generic "Edit/View Invoice"
+  // label — falls back to a mode label for a brand-new, not-yet-saved invoice.
+  $: pageTitle = isCreateMode
+    ? 'New Invoice'
+    : (formData.originalInvoiceNo && formData.originalInvoiceNo !== 'DRAFT' ? formData.originalInvoiceNo : (mode === 'view' ? 'View Invoice' : 'Edit Invoice'));
 
   // Subscribe to Firestore option stores and use arrays for select fields
   let customerOptions: {label: string, value: any}[] = [];
@@ -382,11 +381,24 @@
     return 'exempt';
   }
 
+  function formatNumber(value: any): number {
+    const num = parseFloat(value);
+    return isNaN(num) ? 0 : parseFloat(num.toFixed(2));
+  }
+
   function updateAmount(idx: number, key: string, value: any) {
     // Ensure the item at the given index exists before updating
     if (lineItems[idx]) {
-        (lineItems[idx] as Record<string, any>)[key] = value;
         const item = lineItems[idx];
+        
+        // Format the value based on its type
+        if (key === 'qty' || key === 'price' || key === 'amount') {
+          value = formatNumber(value);
+        }
+        
+        // Update the item property
+        (item as Record<string, any>)[key] = value;
+        
         // Autofill linked fields when an item is selected
         if (key === 'item') {
           const selected = itemOptions.find(o => String(o.value) === String(value));
@@ -402,13 +414,19 @@
             if (resolvedTaxType !== undefined) item.taxType = resolvedTaxType;
             // Always update price: prefer sales_price, fallback to price
             const resolvedPrice = (typeof raw.sales_price === 'number' ? raw.sales_price : undefined) ?? (typeof raw.price === 'number' ? raw.price : undefined);
-            if (resolvedPrice !== undefined) item.price = resolvedPrice;
+            if (resolvedPrice !== undefined) item.price = formatNumber(resolvedPrice);
           }
         }
-        const dscPercent = getDiscountPercent(item.dsc);
-        const discounted = (item.price || 0) * (1 - dscPercent / 100);
-        item.amount = +(discounted * (item.qty || 0)).toFixed(2);
+        
+        // Recalculate amount if price, qty, or discount changes
+        if (['price', 'qty', 'dsc'].includes(key)) {
+          const dscPercent = getDiscountPercent(item.dsc);
+          const discounted = (item.price || 0) * (1 - dscPercent / 100);
+          item.amount = formatNumber(discounted * (item.qty || 0));
+        }
+        
         item.dscDisplay = getDiscountLabel(item.dsc);
+        
         // Reassign the array to trigger reactivity
         lineItems = [...lineItems];
     }
@@ -528,7 +546,8 @@
           ...baseInvoiceData,
           invoiceNo,
           createdAt: new Date(),
-          status
+          // Mark cash sales as paid automatically
+          status: formData.cashSale ? 'Paid' : status
         };
         
         // Add the invoice to Firestore and get the document reference
@@ -555,7 +574,8 @@
         const updateInvoiceData = {
           ...baseInvoiceData,
           invoiceNo: invoiceNo || await generateNextDocumentId(DocumentType.SALES_INVOICE),
-          status: status // Use the status passed to the function (Draft or Unpaid)
+          // Mark cash sales as paid automatically, otherwise use the passed status
+          status: formData.cashSale ? 'Paid' : status
         };
         
         // Update the invoice in Firestore
@@ -574,12 +594,19 @@
     } catch (error) {
       console.error('Error saving sales invoice:', error);
       // Handle errors, e.g., show an error message to the user
-      alert('Failed to save sales invoice. Please try again.');
+      alert('Failed to save sales invoice: ' + (error instanceof Error ? error.message : 'Please try again.'));
     }
+  }
+
+  // Reset payment method whenever a sale stops being a cash sale, mirroring the old
+  // checkbox's on:change handler (now that Cash Sale is a plain select field).
+  $: if (!formData.cashSale && formData.paymentMethod) {
+    formData.paymentMethod = '';
   }
 
   // Define the form fields
   $: fields = [
+    { label: 'Cash Sale', name: 'cashSale', type: 'select', options: [{ label: 'No', value: false }, { label: 'Yes', value: true }] },
     { label: 'Customer', name: 'customer', type: 'select', options: customerOptions, required: true },
     { label: 'Invoice Date', name: 'invoiceDate', type: 'date', required: true },
     { label: 'Due Date', name: 'dueDate', type: 'date', required: true },
@@ -591,8 +618,7 @@
       options: paymentMethodOptions,
       class: !formData.cashSale ? 'hidden' : ''
     },
-    { label: 'PO #', name: 'poNumber', type: 'text', placeholder: 'e.g PO-0001' },
-    { label: 'Memo', name: 'memo', type: 'textarea', placeholder: 'Add a memo' }
+    { label: 'PO #', name: 'poNumber', type: 'text', placeholder: 'e.g PO-0001' }
   ];
 
   $: columns = [
@@ -610,26 +636,20 @@
 </script>
 
 <FormLayout title={pageTitle} backPath="/customerCenter/salesInvoice/list">
-  <!-- Simple Cash Sale Toggle -->
-  <div class="flex items-center mb-4">
-    <label for="cash-sale" class="text-sm font-medium text-gray-700 mr-2">Cash Sale</label>
-    <input
-      id="cash-sale"
-      type="checkbox"
-      class="h-5 w-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-      bind:checked={formData.cashSale}
-      on:change={(e) => {
-        const target = e.target as HTMLInputElement;
-        if (target) {
-          formData.cashSale = target.checked;
-          if (!formData.cashSale) {
-            formData.paymentMethod = '';
-          }
-        }
-      }}
-      disabled={isViewMode}
-    />
-  </div>
+  <svelte:fragment slot="header-actions">
+    <div class="w-full sm:w-64">
+      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+      <textarea
+        id="field-memo"
+        rows="2"
+        class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
+        style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        placeholder="Add a memo"
+        bind:value={formData.memo}
+        disabled={isViewMode}
+      ></textarea>
+    </div>
+  </svelte:fragment>
 
   <!-- Main Form Fields -->
   <FormSection withSeparator={false}>
@@ -643,6 +663,7 @@
     actionLabel="Add Item"
     onAction={addItem}
     isItemTable={true}
+    grow={true}
     columns={columns}
     items={lineItems}
     onAdd={!isViewMode ? addItem : undefined}

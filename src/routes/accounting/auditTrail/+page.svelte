@@ -66,6 +66,9 @@
   // Modal state
   let selectedEntry: JournalEntry | null = null;
 
+  // Shared inline style for filter inputs (theme-aware)
+  const inputStyle = 'background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);';
+
   onMount(async () => {
     await loadJournalEntries();
   });
@@ -273,74 +276,77 @@
 
 <FormLayout title="Transaction Journal">
   <div class="mb-4">
-    <h2 class="text-lg font-semibold text-gray-800 mb-2">Comprehensive Journal Entry Analysis</h2>
-    <p class="text-gray-600">View, filter, and analyze all journal entries with detailed balance validation</p>
+    <h2 class="text-lg font-semibold mb-2" style="color: var(--color-neutral-800);">Comprehensive Journal Entry Analysis</h2>
+    <p style="color: var(--color-neutral-600);">View, filter, and analyze all journal entries with detailed balance validation</p>
   </div>
 
-  <!-- Summary Statistics -->
-  <FormSection title="Summary Statistics">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-blue-50 p-4 rounded-lg">
-        <div class="text-2xl font-bold text-blue-600">{totalEntries}</div>
-        <div class="text-sm text-blue-800">Total Entries</div>
-      </div>
-      <div class="bg-green-50 p-4 rounded-lg">
-        <div class="text-2xl font-bold text-green-600">{balancedEntries}</div>
-        <div class="text-sm text-green-800">Balanced</div>
-      </div>
-      <div class="bg-red-50 p-4 rounded-lg">
-        <div class="text-2xl font-bold text-red-600">{unbalancedEntries}</div>
-        <div class="text-sm text-red-800">Unbalanced</div>
-      </div>
-      <div class="bg-purple-50 p-4 rounded-lg">
-        <div class="text-2xl font-bold text-purple-600">{formatCurrency(totalDebits)}</div>
-        <div class="text-sm text-purple-800">Total Debits</div>
-      </div>
+  <!-- Summary line — plain text, no cards -->
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-4 text-sm">
+    <div class="flex items-baseline gap-1.5">
+      <span style="color: var(--color-neutral-500);">Total Entries:</span>
+      <span class="font-semibold" style="color: var(--color-neutral-800);">{totalEntries}</span>
     </div>
-  </FormSection>
+    <div class="flex items-baseline gap-1.5">
+      <span style="color: var(--color-neutral-500);">Balanced:</span>
+      <span class="font-semibold" style="color: var(--color-success-600);">{balancedEntries}</span>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <span style="color: var(--color-neutral-500);">Unbalanced:</span>
+      <span class="font-semibold" style="color: var(--color-error-600);">{unbalancedEntries}</span>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <span style="color: var(--color-neutral-500);">Total Debits:</span>
+      <span class="font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(totalDebits)}</span>
+    </div>
+  </div>
 
   <!-- Filters -->
   <FormSection title="Filters">
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-700);">Date From</label>
         <input
           type="date"
           bind:value={dateFrom}
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
+          style={inputStyle}
         />
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-700);">Date To</label>
         <input
           type="date"
           bind:value={dateTo}
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
+          style={inputStyle}
         />
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Account</label>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-700);">Account</label>
         <input
           type="text"
           bind:value={accountFilter}
           placeholder="Filter by account name"
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
+          style={inputStyle}
         />
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Source Type</label>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-700);">Source Type</label>
         <input
           type="text"
           bind:value={sourceTypeFilter}
           placeholder="Filter by source type"
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
+          style={inputStyle}
         />
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-700);">Status</label>
         <select
           bind:value={statusFilter}
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors cursor-pointer"
+          style={inputStyle}
         >
           <option value="">All Statuses</option>
           <option value="posted">Posted</option>
@@ -349,10 +355,11 @@
         </select>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Balance Status</label>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-700);">Balance Status</label>
         <select
           bind:value={balanceFilter}
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors cursor-pointer"
+          style={inputStyle}
         >
           <option value="all">All Entries</option>
           <option value="balanced">Balanced Only</option>
@@ -360,33 +367,37 @@
         </select>
       </div>
     </div>
-    
+
     <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+      <label class="block text-sm font-medium mb-1" style="color: var(--color-neutral-700);">Search</label>
       <input
         type="text"
         bind:value={searchTerm}
         placeholder="Search by reference, description, or account"
-        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        class="w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
+        style={inputStyle}
       />
     </div>
 
-    <div class="flex space-x-4">
+    <div class="flex flex-wrap gap-3">
       <button
         on:click={applyFilters}
-        class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+        class="px-4 py-2 rounded-md text-sm font-medium text-white transition-colors"
+        style="background: var(--color-primary-600);"
       >
         Apply Filters
       </button>
       <button
         on:click={clearFilters}
-        class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+        class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+        style="background: var(--color-neutral-100); color: var(--color-neutral-700);"
       >
         Clear Filters
       </button>
       <button
         on:click={exportToCSV}
-        class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+        class="px-4 py-2 rounded-md text-sm font-medium text-white transition-colors"
+        style="background: var(--color-success-600);"
       >
         Export CSV
       </button>
@@ -397,82 +408,90 @@
   <FormSection title="Journal Entries">
     {#if isLoading}
       <div class="text-center py-8">
-        <div class="text-gray-600">Loading journal entries...</div>
+        <div style="color: var(--color-neutral-600);">Loading journal entries...</div>
       </div>
     {:else if error}
       <div class="text-center py-8">
-        <div class="text-red-600">Error: {error}</div>
+        <div style="color: var(--color-error-600);">Error: {error}</div>
       </div>
     {:else if filteredEntries.length === 0}
       <div class="text-center py-8">
-        <div class="text-gray-600">No journal entries found matching the current filters.</div>
+        <div style="color: var(--color-neutral-600);">No journal entries found matching the current filters.</div>
       </div>
     {:else}
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+        <table class="min-w-full text-sm border-collapse">
+          <thead>
             <tr>
-              <th 
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+              <th
+                class="px-4 py-3 text-left text-xs font-medium uppercase cursor-pointer transition-colors hover:[background:var(--color-neutral-100)]"
+                style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);"
                 on:click={() => changeSort('journalDate')}
               >
                 Date {sortField === 'journalDate' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </th>
-              <th 
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+              <th
+                class="px-4 py-3 text-left text-xs font-medium uppercase cursor-pointer transition-colors hover:[background:var(--color-neutral-100)]"
+                style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);"
                 on:click={() => changeSort('referenceNo')}
               >
                 Reference {sortField === 'referenceNo' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Debits</th>
-              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Credits</th>
-              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Balance</th>
-              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Source</th>
+              <th class="px-4 py-3 text-center text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Status</th>
+              <th class="px-4 py-3 text-right text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Debits</th>
+              <th class="px-4 py-3 text-right text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Credits</th>
+              <th class="px-4 py-3 text-center text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Balance</th>
+              <th class="px-4 py-3 text-center text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Actions</th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody>
             {#each getPaginatedEntries() as entry}
-              <tr class="hover:bg-gray-50">
-                <td class="px-4 py-3 text-sm text-gray-900">
+              {@const statusLower = (entry.status || '').toLowerCase()}
+              {@const statusColor = statusLower === 'posted' ? '--color-success-600' : statusLower === 'draft' ? '--color-warning-600' : statusLower === 'void' ? '--color-error-600' : '--color-neutral-500'}
+              <tr class="transition-colors hover:[background:var(--color-primary-50)]">
+                <td class="px-4 py-3" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                   {formatDate(entry.journalDate)}
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-900 font-medium">
+                <td class="px-4 py-3 font-medium" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                   {entry.referenceNo}
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-900">
+                <td class="px-4 py-3" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                   {entry.description}
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-900">
+                <td class="px-4 py-3" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                   {entry.sourceType}
                 </td>
-                <td class="px-4 py-3 text-sm text-center">
-                  <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                <td class="px-4 py-3 text-center" style="border-bottom: 1px solid var(--color-neutral-100);">
+                  <span
+                    class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full"
+                    style={`color: var(${statusColor}); background: color-mix(in srgb, var(${statusColor}) 14%, transparent);`}
+                  >
                     {entry.status}
                   </span>
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-900 text-right">
+                <td class="px-4 py-3 text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                   {formatCurrency(entry.totalDebit)}
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-900 text-right">
+                <td class="px-4 py-3 text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                   {formatCurrency(entry.totalCredit)}
                 </td>
-                <td class="px-4 py-3 text-sm text-center">
+                <td class="px-4 py-3 text-center" style="border-bottom: 1px solid var(--color-neutral-100);">
                   {#if entry.isBalanced}
-                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                      ✅ Balanced
+                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full" style="color: var(--color-success-600); background: color-mix(in srgb, var(--color-success-600) 14%, transparent);">
+                      Balanced
                     </span>
                   {:else}
-                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                      ❌ Unbalanced
+                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full" style="color: var(--color-error-600); background: color-mix(in srgb, var(--color-error-600) 14%, transparent);">
+                      Unbalanced
                     </span>
                   {/if}
                 </td>
-                <td class="px-4 py-3 text-sm text-center">
+                <td class="px-4 py-3 text-center" style="border-bottom: 1px solid var(--color-neutral-100);">
                   <button
-                    class="text-indigo-600 hover:text-indigo-900 text-xs"
+                    class="text-xs font-medium transition-colors"
+                    style="color: var(--color-primary-600);"
                     on:click={() => showEntryDetails(entry)}
                   >
                     View Details
@@ -480,8 +499,8 @@
                 </td>
               </tr>
               {#if !entry.isBalanced}
-                <tr class="bg-red-50">
-                  <td colspan="9" class="px-4 py-2 text-xs text-red-700">
+                <tr>
+                  <td colspan="9" class="px-4 py-2 text-xs" style="background: var(--color-error-50); color: var(--color-error-700); border-bottom: 1px solid var(--color-neutral-100);">
                     <strong>Balance Difference:</strong> {formatCurrency(entry.balanceDifference)}
                   </td>
                 </tr>
@@ -494,14 +513,15 @@
       <!-- Pagination -->
       {#if totalPages > 1}
         <div class="flex items-center justify-between mt-4">
-          <div class="text-sm text-gray-700">
+          <div class="text-sm" style="color: var(--color-neutral-700);">
             Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredEntries.length)} of {filteredEntries.length} entries
           </div>
-          <div class="flex space-x-2">
+          <div class="flex gap-2">
             <button
               on:click={() => changePage(currentPage - 1)}
               disabled={currentPage === 1}
-              class="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-1 text-sm rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style="border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
             >
               Previous
             </button>
@@ -511,7 +531,10 @@
             }) as page}
               <button
                 on:click={() => changePage(page)}
-                class="px-3 py-1 text-sm border border-gray-300 rounded-md {currentPage === page ? 'bg-indigo-600 text-white' : ''}"
+                class="px-3 py-1 text-sm rounded-md border transition-colors"
+                style={currentPage === page
+                  ? 'background: var(--color-primary-600); border-color: var(--color-primary-600); color: white;'
+                  : 'border-color: var(--color-neutral-200); color: var(--color-neutral-700);'}
               >
                 {page}
               </button>
@@ -519,7 +542,8 @@
             <button
               on:click={() => changePage(currentPage + 1)}
               disabled={currentPage === totalPages}
-              class="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-1 text-sm rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style="border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
             >
               Next
             </button>
@@ -532,57 +556,58 @@
 
 <!-- Entry Details Modal -->
 {#if selectedEntry}
-  <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
-      <div class="mt-3">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Journal Entry Details</h3>
-        <div class="mb-4">
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div><strong>Reference:</strong> {selectedEntry.referenceNo}</div>
-            <div><strong>Date:</strong> {formatDate(selectedEntry.journalDate)}</div>
-            <div><strong>Description:</strong> {selectedEntry.description}</div>
-            <div><strong>Source Type:</strong> {selectedEntry.sourceType}</div>
-            <div><strong>Status:</strong> {selectedEntry.status}</div>
-            <div><strong>Posted:</strong> {selectedEntry.isPosted ? 'Yes' : 'No'}</div>
-          </div>
+  <div class="fixed top-0 left-0 right-0 bottom-0 flex items-center justify-center z-50 p-4" style="background: rgba(15, 23, 42, 0.4);">
+    <div class="rounded-lg w-full max-w-3xl max-h-[85vh] overflow-y-auto border" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); box-shadow: var(--shadow-lg);">
+      <div class="px-5 py-3.5" style="border-bottom: 1px solid var(--color-neutral-200);">
+        <h3 class="text-lg font-semibold" style="color: var(--color-neutral-800);">Journal Entry Details</h3>
+      </div>
+      <div class="p-5">
+        <div class="grid grid-cols-2 gap-4 text-sm mb-5">
+          <div><span style="color: var(--color-neutral-500);">Reference:</span> <span style="color: var(--color-neutral-800);">{selectedEntry.referenceNo}</span></div>
+          <div><span style="color: var(--color-neutral-500);">Date:</span> <span style="color: var(--color-neutral-800);">{formatDate(selectedEntry.journalDate)}</span></div>
+          <div><span style="color: var(--color-neutral-500);">Description:</span> <span style="color: var(--color-neutral-800);">{selectedEntry.description}</span></div>
+          <div><span style="color: var(--color-neutral-500);">Source Type:</span> <span style="color: var(--color-neutral-800);">{selectedEntry.sourceType}</span></div>
+          <div><span style="color: var(--color-neutral-500);">Status:</span> <span style="color: var(--color-neutral-800);">{selectedEntry.status}</span></div>
+          <div><span style="color: var(--color-neutral-500);">Posted:</span> <span style="color: var(--color-neutral-800);">{selectedEntry.isPosted ? 'Yes' : 'No'}</span></div>
         </div>
-        
-        <div class="mb-4">
-          <h4 class="font-medium text-gray-900 mb-2">Journal Lines</h4>
+
+        <div>
+          <h4 class="font-medium text-sm uppercase tracking-wide mb-2" style="color: var(--color-neutral-500);">Journal Lines</h4>
           <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
+            <table class="min-w-full text-sm border-collapse">
+              <thead>
                 <tr>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Line</th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                  <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Debit</th>
-                  <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Credit</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Line</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Account</th>
+                  <th class="px-3 py-2 text-left text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Debit</th>
+                  <th class="px-3 py-2 text-right text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Credit</th>
                 </tr>
               </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
+              <tbody>
                 {#each selectedEntry.lines as line}
                   <tr>
-                    <td class="px-3 py-2 text-sm text-gray-900">{line.lineNo}</td>
-                    <td class="px-3 py-2 text-sm text-gray-900">{line.accountName}</td>
-                    <td class="px-3 py-2 text-sm text-gray-900">{line.lineDescription}</td>
-                    <td class="px-3 py-2 text-sm text-gray-900 text-right">{formatCurrency(line.debit)}</td>
-                    <td class="px-3 py-2 text-sm text-gray-900 text-right">{formatCurrency(line.credit)}</td>
+                    <td class="px-3 py-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{line.lineNo}</td>
+                    <td class="px-3 py-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{line.accountName}</td>
+                    <td class="px-3 py-2" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{line.lineDescription}</td>
+                    <td class="px-3 py-2 text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(line.debit)}</td>
+                    <td class="px-3 py-2 text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(line.credit)}</td>
                   </tr>
                 {/each}
               </tbody>
             </table>
           </div>
         </div>
-        
-        <div class="flex justify-end space-x-3">
-          <button
-            on:click={() => selectedEntry = null}
-            class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-          >
-            Close
-          </button>
-        </div>
+      </div>
+
+      <div class="px-5 py-3 flex justify-end" style="background: var(--color-neutral-50); border-top: 1px solid var(--color-neutral-200);">
+        <button
+          on:click={() => selectedEntry = null}
+          class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          style="background: var(--color-neutral-100); color: var(--color-neutral-700);"
+        >
+          Close
+        </button>
       </div>
     </div>
   </div>

@@ -1,4 +1,4 @@
-import { addDocToCollection, updateDocInCollection, getDocFromCollection } from './firestoreCrud';
+import { addDocToCollection, updateDocInCollection, getDocFromCollection, queryCollectionDocs, type FilterCondition } from './firestoreCrud';
 
 /**
  * Generates a unique reference number for journal entries
@@ -6,6 +6,56 @@ import { addDocToCollection, updateDocInCollection, getDocFromCollection } from 
  */
 function generateJournalEntryNumber(): string {
   return `JE-${Date.now().toString().substring(7)}`;
+}
+
+/**
+ * Checks whether a given transaction date falls within a closed fiscal period
+ * (transactions/accounting/fiscalPeriods, isClosed === true).
+ * @param date - Date, Firestore timestamp, or date string to check
+ * @returns Whether the date is closed, and a human-readable label for the period if so
+ */
+export async function isDateInClosedPeriod(date: any): Promise<{ closed: boolean; periodLabel?: string }> {
+  try {
+    let d: Date;
+    if (date instanceof Date) {
+      d = date;
+    } else if (date && typeof date === 'object' && 'seconds' in date) {
+      d = new Date(date.seconds * 1000);
+    } else if (typeof date === 'string') {
+      d = new Date(date);
+    } else {
+      return { closed: false };
+    }
+    if (isNaN(d.getTime())) return { closed: false };
+
+    const filters: FilterCondition[] = [{ field: 'isClosed', operator: '==', value: true }];
+    const closedPeriods = await queryCollectionDocs('accounting/fiscalPeriods', filters);
+
+    for (const period of closedPeriods as any[]) {
+      const start = period.startDate?.seconds ? new Date(period.startDate.seconds * 1000) : new Date(period.startDate);
+      const end = period.endDate?.seconds ? new Date(period.endDate.seconds * 1000) : new Date(period.endDate);
+      if (d >= start && d <= end) {
+        const periodLabel = period.monthName ? `${period.monthName} ${period.year}` : `${period.year}-${(period.month ?? 0) + 1}`;
+        return { closed: true, periodLabel };
+      }
+    }
+    return { closed: false };
+  } catch (error) {
+    // If the period-status check itself fails (e.g. transient Firestore error), don't block a legitimate save.
+    console.error('Error checking fiscal period status:', error);
+    return { closed: false };
+  }
+}
+
+/**
+ * Throws if the given transaction date falls within a closed fiscal period.
+ * Call this before creating/updating a journal entry so closed-period postings are rejected.
+ */
+async function assertPeriodOpen(date: any): Promise<void> {
+  const { closed, periodLabel } = await isDateInClosedPeriod(date);
+  if (closed) {
+    throw new Error(`Cannot post this transaction: the fiscal period${periodLabel ? ` "${periodLabel}"` : ''} is closed. Reopen it from Period Closing or choose a different date.`);
+  }
 }
 
 /**
@@ -33,10 +83,20 @@ function formatJournalDescription(sourceType: string, sourceRef: string): string
  * @returns The created journal entry ID
  */
 export async function createSalesInvoiceJournalEntry(invoice: any): Promise<string | null> {
+  await assertPeriodOpen(invoice.invoiceDate);
   try {
-    // Determine the accounts based on invoice properties
-    const drAccountId = invoice.cashSale ? 'cash' : 'accounts-receivable';
-    const drAccountName = invoice.cashSale ? 'Cash' : 'Accounts Receivable';
+    // Calculate amounts based on the correct accounting computation
+    const grossAmount = invoice.grossAmount || 0;
+    const discount = invoice.discount || 0;
+    const netSales = invoice.netSales || 0;
+    const vat = invoice.vat || 0;
+    const vatableSales = invoice.vatableSales || 0;
+    const lessWithholding = invoice.lessWithholding || 0;
+    const totalDue = invoice.totalDue || 0;
+    
+    // Determine the main account based on cash sale or credit sale
+    const mainAccountId = invoice.cashSale ? 'undeposited-cash' : 'accounts-receivable';
+    const mainAccountName = invoice.cashSale ? 'Undeposited Cash' : 'Accounts Receivable';
     
     // Create the journal entry header
     const journalEntryData = {
@@ -46,82 +106,89 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
       memo: invoice.memo || '',
       sourceType: 'salesInvoice',
       sourceId: invoice.id,
-      totalDebit: invoice.totalDue,
-      totalCredit: invoice.totalDue,
+      totalDebit: totalDue,
+      totalCredit: totalDue,
       isPosted: true,
       status: 'posted',
       createdAt: new Date(),
       updatedAt: new Date()
     };
     
-    // Create journal entry lines
+    // Create journal entry lines - Simplified Entry (as shown in the image)
     const lines: any[] = [];
+    let lineCounter = 1;
     
-    // Main entry - Debit A/R or Cash
+    // 1. Debit Main Account (A/R or Undeposited Cash) - Net Amount Due
     lines.push({
-      lineNo: 1,
-      accountId: drAccountId,
-      accountName: drAccountName,
+      lineNo: lineCounter++,
+      accountId: mainAccountId,
+      accountName: mainAccountName,
       nameType: 'customer',
       nameId: invoice.customer,
       nameName: invoice.customerName,
       lineDescription: `Invoice #${invoice.invoiceNo}`,
-      debit: invoice.totalDue,
+      debit: totalDue,
       credit: 0
     });
     
-    let lineCounter = 2;
-    
-    // Add sales revenue entries
-    // Group by income account for simpler entries
-    const salesByAccount: Record<string, number> = {};
-    
-    invoice.lineItems.forEach((item: any) => {
-      // We're using a simplified account model - in a real system you'd get these from the item setup
-      const incomeAccountId = 'sales-revenue';
-      const incomeAccountName = 'Sales Revenue';
+    // 2. Debit Sales Discount (if any)
+    if (discount > 0) {
+      // Calculate VAT-exclusive discount amount
+      const discountVatExclusive = discount / 1.12;
       
-      // Add the item amount to the appropriate income account
-      const itemNetAmount = item.amount || 0;
-      if (!salesByAccount[incomeAccountId]) {
-        salesByAccount[incomeAccountId] = 0;
-      }
-      salesByAccount[incomeAccountId] += itemNetAmount;
-    });
-    
-    // Create revenue credit entries - one per account
-    Object.entries(salesByAccount).forEach(([accountId, amount]) => {
       lines.push({
         lineNo: lineCounter++,
-        accountId,
-        accountName: accountId === 'sales-revenue' ? 'Sales Revenue' : accountId,
-        lineDescription: `Sales - Invoice #${invoice.invoiceNo}`,
-        debit: 0,
-        credit: amount
-      });
-    });
-    
-    // Add withholding tax entry if applicable
-    if (invoice.lessWithholding && invoice.lessWithholding > 0) {
-      lines.push({
-        lineNo: lineCounter++,
-        accountId: 'withholding-tax-receivable',
-        accountName: 'Withholding Tax Receivable',
-        lineDescription: `Withholding Tax - Invoice #${invoice.invoiceNo}`,
-        debit: invoice.lessWithholding,
+        accountId: 'sales-discount',
+        accountName: 'Sales Discount',
+        nameType: 'customer',
+        nameId: invoice.customer,
+        nameName: invoice.customerName,
+        lineDescription: `Sales Discount - Invoice #${invoice.invoiceNo}`,
+        debit: discountVatExclusive,
         credit: 0
       });
     }
     
-    // Add VAT entry if applicable
-    if (invoice.vat && invoice.vat > 0) {
+    // 3. Debit CWT (BIR2307) - Withholding Tax
+    if (lessWithholding > 0) {
       lines.push({
         lineNo: lineCounter++,
-        accountId: 'vat-payable',
-        accountName: 'VAT Payable',
-        lineDescription: `VAT - Invoice #${invoice.invoiceNo}`,
+        accountId: 'cwt-bir2307',
+        accountName: 'CWT (BIR2307)',
+        nameType: 'customer',
+        nameId: invoice.customer,
+        nameName: invoice.customerName,
+        lineDescription: `Withholding Tax - Invoice #${invoice.invoiceNo}`,
+        debit: lessWithholding,
+        credit: 0
+      });
+    }
+    
+    // 4. Credit Output VAT
+    if (vat > 0) {
+      lines.push({
+        lineNo: lineCounter++,
+        accountId: 'output-vat',
+        accountName: 'Output VAT',
+        lineDescription: `Output VAT - Invoice #${invoice.invoiceNo}`,
         debit: 0,
-        credit: invoice.vat
+        credit: vat
+      });
+    }
+    
+    // 5. Credit Sales Revenue (VAT-exclusive amount of gross sales)
+    const salesRevenue = grossAmount / 1.12;
+    if (salesRevenue > 0) {
+      lines.push({
+        lineNo: lineCounter++,
+        accountId: 'sales-revenue',
+        accountName: 'Sales',
+        nameType: 'customer',
+        nameId: invoice.customer,
+        nameName: invoice.customerName,
+        lineDescription: `Sales Revenue - Invoice #${invoice.invoiceNo}`,
+        debit: 0,
+        credit: salesRevenue
       });
     }
     
@@ -135,9 +202,15 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
     const existingEntries = await getJournalEntriesForSource('salesInvoice', invoice.id);
     
     if (existingEntries && existingEntries.length > 0) {
-      // Optionally update or delete existing entries
-      console.log('Journal entry already exists for this invoice');
-      return existingEntries[0].id;
+      // Delete existing entries to prevent duplicates
+      console.log('Deleting existing journal entries for this invoice to prevent duplicates');
+      const { deleteDoc, doc, getFirestore } = await import('firebase/firestore');
+      const { app } = await import('$lib/firebase');
+      const db = getFirestore(app);
+      
+      for (const existingEntry of existingEntries) {
+        await deleteDoc(doc(db, 'transactions', 'accounting', 'journalEntries', existingEntry.id));
+      }
     }
     
     // Add the journal entry to Firestore
@@ -156,6 +229,7 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
  * @returns The created journal entry ID
  */
 export async function createApvJournalEntry(apv: any): Promise<string | null> {
+  await assertPeriodOpen(apv.apvDate);
   try {
     // Create the journal entry header
     const journalEntryData = {
@@ -294,6 +368,7 @@ export async function createApvJournalEntry(apv: any): Promise<string | null> {
  * @returns The created journal entry ID
  */
 export async function createInventoryAdjustmentJournalEntry(adjustment: any): Promise<string | null> {
+  await assertPeriodOpen(adjustment.adjustmentDate);
   try {
     // Create the journal entry header
     const journalEntryData = {
@@ -399,12 +474,13 @@ export async function createInventoryAdjustmentJournalEntry(adjustment: any): Pr
  * @returns The created journal entry ID
  */
 export async function createReceiptJournalEntry(receipt: any): Promise<string | null> {
+  await assertPeriodOpen(receipt.receiptDate);
   try {
     // Determine the cash account based on payment method
     // In a real app, this would come from a mapping of payment methods to accounts
     let cashAccountId = 'cash';
     let cashAccountName = 'Cash';
-    
+
     // Payment method specific accounts
     switch(receipt.paymentMethod) {
       case 'check':
@@ -581,12 +657,13 @@ export async function createReceiptJournalEntry(receipt: any): Promise<string | 
  * @returns The created journal entry ID
  */
 export async function createVendorPaymentJournalEntry(payment: any): Promise<string | null> {
+  await assertPeriodOpen(payment.paymentDate);
   try {
     // Determine the cash account based on payment method
     // In a real app, this would come from a mapping of payment methods to accounts
     let cashAccountId = 'cash';
     let cashAccountName = 'Cash';
-    
+
     // Payment method specific accounts
     switch(payment.paymentMethod) {
       case 'check':
@@ -696,19 +773,16 @@ export async function createVendorPaymentJournalEntry(payment: any): Promise<str
 
 export async function getJournalEntriesForSource(sourceType: string, sourceId: string): Promise<any[]> {
   try {
-    // For a real implementation, use the Firestore query API with where clauses
-    // Using transactions/accounting/journalEntries path
-    // Here's a placeholder that would be implemented with actual Firestore query code
+    // Import the necessary Firestore functions
+    const { getFirestore, collection, query, where, getDocs } = await import('firebase/firestore');
+    const { app } = await import('$lib/firebase');
     
-    // Example of how this would be implemented with Firestore:
-    // const db = getFirestore(app);
-    // const journalEntriesRef = collection(db, 'transactions', 'accounting', 'journalEntries');
-    // const q = query(journalEntriesRef, where('sourceType', '==', sourceType), where('sourceId', '==', sourceId));
-    // const querySnapshot = await getDocs(q);
-    // return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const db = getFirestore(app);
+    const journalEntriesRef = collection(db, 'transactions', 'accounting', 'journalEntries');
+    const q = query(journalEntriesRef, where('sourceType', '==', sourceType), where('sourceId', '==', sourceId));
+    const querySnapshot = await getDocs(q);
     
-    // For now, returning empty array
-    return [];
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error('Error getting journal entries:', error);
     return [];
@@ -721,6 +795,7 @@ export async function getJournalEntriesForSource(sourceType: string, sourceId: s
  * @returns The created journal entry ID
  */
 export async function createCreditMemoJournalEntry(creditMemo: any): Promise<string | null> {
+  await assertPeriodOpen(creditMemo.cmDate);
   try {
     // Create the journal entry header
     const journalEntryData = {
@@ -885,6 +960,7 @@ export async function createCreditMemoJournalEntry(creditMemo: any): Promise<str
  * @returns The created journal entry ID
  */
 export async function createReceivingReportJournalEntry(receivingReport: any): Promise<string | null> {
+  await assertPeriodOpen(receivingReport.rrDate);
   try {
     // Create the journal entry header
     const journalEntryData = {

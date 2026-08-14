@@ -28,12 +28,11 @@
     loadReceivingReport(docId);
   }
   
-  // Adjust page title based on mode
-  $: pageTitle = {
-    'create': 'Create Receiving Report',
-    'edit': 'Edit Receiving Report',
-    'view': 'View Receiving Report'
-  }[mode];
+  // Show the actual receiving report number once known, instead of a generic "Edit/View
+  // Receiving Report" label — falls back to a mode label for a brand-new, not-yet-saved report.
+  $: pageTitle = isCreateMode
+    ? 'New Receiving Report'
+    : (formData.rrNo ? formData.rrNo : (mode === 'view' ? 'View Receiving Report' : 'Edit Receiving Report'));
 
   // Get options from the Firestore options store with proper type definitions
   let vendorOptions: {label: string, value: string}[] = [];
@@ -129,8 +128,7 @@
     { label: 'Vendor', name: 'vendor', type: 'select', options: vendorOptions, required: true, onChange: handleVendorChange },
     { label: 'Location', name: 'location', type: 'select', options: locationOptions, onChange: handleLocationChange },
     { label: 'Reference', name: 'reference', type: 'text' },
-    { label: 'PO No', name: 'poNo', type: 'text' },
-    { label: 'Memo', name: 'memo', type: 'textarea', rows: 3 }
+    { label: 'PO No', name: 'poNo', type: 'text' }
   ];
   
   // Define columns for the line items table
@@ -197,16 +195,6 @@
     }
   }
   
-  function handleItemChange(index: number, itemId: string) {
-    const selectedItem = itemOptions.find(opt => opt.value === itemId);
-    if (selectedItem) {
-      formData.items[index].description = selectedItem.description || '';
-      formData.items[index].unit = selectedItem.unit || '';
-      formData.items[index].unitCost = selectedItem.unitCost || 0;
-      calculateLineTotal(index);
-    }
-  }
-
   function addItem() {
     formData.items = [...formData.items, {
       id: '',
@@ -351,9 +339,24 @@
 </script>
 
 <FormLayout title={pageTitle} backPath="/vendorCenter/receivingReport/list">
+  <svelte:fragment slot="header-actions">
+    <div class="w-full sm:w-64">
+      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+      <textarea
+        id="field-memo"
+        rows="2"
+        class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
+        style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        placeholder="Add a memo"
+        bind:value={formData.memo}
+        disabled={isViewMode}
+      ></textarea>
+    </div>
+  </svelte:fragment>
+
   {#if isLoading}
     <div class="flex justify-center items-center h-64">
-      <p class="text-gray-600">Loading...</p>
+      <p style="color: var(--color-neutral-600);">Loading...</p>
     </div>
   {:else}
     <!-- Document header fields section -->
@@ -370,6 +373,7 @@
       actionIcon="material-symbols:add"
       onAction={addItem}
       isItemTable={true}
+      grow={true}
       columns={columns}
       items={formData.items}
       onRemove={!isViewMode ? removeItem : null}

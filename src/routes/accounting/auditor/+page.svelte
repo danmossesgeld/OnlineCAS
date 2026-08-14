@@ -747,12 +747,12 @@
     }
   }
 
-  function getSeverityColor(severity: string): string {
+  function getSeverityColorVar(severity: string): string {
     switch (severity) {
-      case 'high': return 'text-red-600 bg-red-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'low': return 'text-blue-600 bg-blue-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'high': return '--color-error-600';
+      case 'medium': return '--color-warning-600';
+      case 'low': return '--color-primary-600';
+      default: return '--color-neutral-500';
     }
   }
 
@@ -772,94 +772,96 @@
 
 <FormLayout title="Data Auditor">
   <div class="mb-4">
-    <h2 class="text-lg font-semibold text-gray-800 mb-2">Review data quality and identify missing fields</h2>
-    <p class="text-gray-600">Click 'Run Audit' to analyze your data for missing or invalid fields</p>
+    <h2 class="text-lg font-semibold mb-2" style="color: var(--color-neutral-800);">Review data quality and identify missing fields</h2>
+    <p style="color: var(--color-neutral-600);">Click 'Run Audit' to analyze your data for missing or invalid fields</p>
   </div>
 
   <FormSection title="Audit Results">
     <div class="mb-6">
       <div class="flex items-center justify-between mb-4">
-        <div class="flex space-x-4">
+        <div class="flex gap-4">
           <button
             on:click={runAudit}
             disabled={isLoading}
-            class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-4 py-2 rounded-md text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style="background: var(--color-primary-600);"
           >
             {isLoading ? 'Running Audit...' : 'Run Audit'}
           </button>
-          
+
           <button
             on:click={toggleTransactionJournal}
-            class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            class="px-4 py-2 rounded-md text-sm font-medium text-white transition-colors"
+            style="background: var(--color-success-600);"
           >
             {showTransactionJournal ? 'Hide' : 'Show'} Transaction Journal
           </button>
         </div>
-        
+
         {#if lastAuditDate}
-          <div class="text-sm text-gray-600">
+          <div class="text-sm" style="color: var(--color-neutral-600);">
             Last audit: {formatDate(lastAuditDate)}
           </div>
         {/if}
       </div>
 
       {#if showTransactionJournal}
-        <div class="mb-6 border border-gray-200 rounded-lg overflow-hidden">
-          <div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
-            <h3 class="text-lg font-medium text-gray-900">Transaction Journal</h3>
-            <p class="text-sm text-gray-600">Review journal entries and their balance status</p>
+        <div class="mb-6 rounded-lg border overflow-hidden" style="border-color: var(--color-neutral-200);">
+          <div class="px-4 py-3" style="background: var(--color-neutral-50); border-bottom: 1px solid var(--color-neutral-200);">
+            <h3 class="text-lg font-medium" style="color: var(--color-neutral-800);">Transaction Journal</h3>
+            <p class="text-sm" style="color: var(--color-neutral-600);">Review journal entries and their balance status</p>
           </div>
-          
+
           {#if journalLoading}
-            <div class="p-4 text-center text-gray-600">Loading transaction journal...</div>
+            <div class="p-4 text-center" style="color: var(--color-neutral-600);">Loading transaction journal...</div>
           {:else if transactionJournal.length === 0}
-            <div class="p-4 text-center text-gray-600">No journal entries found.</div>
+            <div class="p-4 text-center" style="color: var(--color-neutral-600);">No journal entries found.</div>
           {:else}
             <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+              <table class="min-w-full text-sm border-collapse">
+                <thead>
                   <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Debits</th>
-                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Credits</th>
-                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Date</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Reference</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Debits</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Credits</th>
+                    <th class="px-4 py-3 text-center text-xs font-medium uppercase" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Status</th>
                   </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody>
                   {#each transactionJournal as entry}
-                    <tr class="hover:bg-gray-50">
-                      <td class="px-4 py-3 text-sm text-gray-900">
+                    <tr class="transition-colors hover:[background:var(--color-primary-50)]">
+                      <td class="px-4 py-3" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                         {formatDate(entry.journalDate)}
                       </td>
-                      <td class="px-4 py-3 text-sm text-gray-900 font-medium">
+                      <td class="px-4 py-3 font-medium" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                         {entry.referenceNo}
                       </td>
-                      <td class="px-4 py-3 text-sm text-gray-900">
+                      <td class="px-4 py-3" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                         {entry.description}
                       </td>
-                      <td class="px-4 py-3 text-sm text-gray-900 text-right">
+                      <td class="px-4 py-3 text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                         {formatCurrency(entry.totalDebit)}
                       </td>
-                      <td class="px-4 py-3 text-sm text-gray-900 text-right">
+                      <td class="px-4 py-3 text-right" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                         {formatCurrency(entry.totalCredit)}
                       </td>
-                      <td class="px-4 py-3 text-sm text-center">
+                      <td class="px-4 py-3 text-center" style="border-bottom: 1px solid var(--color-neutral-100);">
                         {#if entry.isBalanced}
-                          <span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                            ✅ Balanced
+                          <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full" style="color: var(--color-success-600); background: color-mix(in srgb, var(--color-success-600) 14%, transparent);">
+                            Balanced
                           </span>
                         {:else}
-                          <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                            ❌ Unbalanced
+                          <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full" style="color: var(--color-error-600); background: color-mix(in srgb, var(--color-error-600) 14%, transparent);">
+                            Unbalanced
                           </span>
                         {/if}
                       </td>
                     </tr>
                     {#if !entry.isBalanced}
-                      <tr class="bg-red-50">
-                        <td colspan="6" class="px-4 py-2 text-xs text-red-700">
+                      <tr>
+                        <td colspan="6" class="px-4 py-2 text-xs" style="background: var(--color-error-50); color: var(--color-error-700); border-bottom: 1px solid var(--color-neutral-100);">
                           <strong>Balance Difference:</strong> {formatCurrency(entry.balanceDifference)}
                         </td>
                       </tr>
@@ -873,9 +875,9 @@
       {/if}
 
       {#if auditResults.length === 0 && !isLoading}
-        <div class="text-center py-8 text-gray-500">
+        <div class="text-center py-8" style="color: var(--color-neutral-500);">
           {#if lastAuditDate}
-            ✅ No data quality issues found! Your data is clean.
+            No data quality issues found. Your data is clean.
           {:else}
             Click "Run Audit" to start analyzing your data.
           {/if}
@@ -883,34 +885,41 @@
       {/if}
 
       {#each auditResults as result}
-        <div class="mb-6 border border-gray-200 rounded-lg overflow-hidden">
-          <div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
+        <div class="mb-6 rounded-lg border overflow-hidden" style="border-color: var(--color-neutral-200);">
+          <div class="px-4 py-3" style="background: var(--color-neutral-50); border-bottom: 1px solid var(--color-neutral-200);">
             <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-gray-900">{result.category}</h3>
-              <div class="flex items-center space-x-4">
-                <span class="text-sm text-gray-600">
+              <h3 class="text-lg font-medium" style="color: var(--color-neutral-800);">{result.category}</h3>
+              <div class="flex items-center gap-4">
+                <span class="text-sm" style="color: var(--color-neutral-600);">
                   {result.issueCount} of {result.totalCount} records have issues
                 </span>
-                <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full" style="color: var(--color-error-600); background: color-mix(in srgb, var(--color-error-600) 14%, transparent);">
                   {Math.round((result.issueCount / result.totalCount) * 100)}% issue rate
                 </span>
               </div>
             </div>
           </div>
-          
-          <div class="divide-y divide-gray-200">
-            {#each result.issues as issue}
-              <div class="px-4 py-3 hover:bg-gray-50">
+
+          <div>
+            {#each result.issues as issue, idx}
+              {@const severityColor = getSeverityColorVar(issue.severity)}
+              <div
+                class="px-4 py-3 transition-colors hover:[background:var(--color-neutral-50)]"
+                style="border-top: 1px solid var(--color-neutral-100); {idx === 0 ? 'border-top: none;' : ''}"
+              >
                 <div class="flex items-start justify-between">
                   <div class="flex-1">
-                    <div class="flex items-center space-x-2 mb-1">
+                    <div class="flex items-center gap-2 mb-1">
                       <span class="text-sm">{getSeverityIcon(issue.severity)}</span>
-                      <span class={`px-2 py-1 text-xs font-medium rounded-full ${getSeverityColor(issue.severity)}`}>
+                      <span
+                        class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full"
+                        style={`color: var(${severityColor}); background: color-mix(in srgb, var(${severityColor}) 14%, transparent);`}
+                      >
                         {issue.severity.toUpperCase()}
                       </span>
                     </div>
-                    <p class="text-sm text-gray-900 mb-1">{issue.issue}</p>
-                    <div class="text-xs text-gray-500 space-x-2">
+                    <p class="text-sm mb-1" style="color: var(--color-neutral-800);">{issue.issue}</p>
+                    <div class="text-xs flex flex-wrap gap-x-2" style="color: var(--color-neutral-500);">
                       {#if issue.documentNo}
                         <span>Document: {issue.documentNo}</span>
                       {/if}
@@ -929,13 +938,13 @@
     </div>
   </FormSection>
 
-  <div class="mt-6 p-4 bg-gray-50 rounded-lg">
-    <div class="text-sm text-gray-600">
+  <div class="mt-6 p-4 rounded-lg" style="background: var(--color-neutral-50);">
+    <div class="text-sm" style="color: var(--color-neutral-600);">
       <p><strong>Severity Levels:</strong></p>
       <ul class="list-disc list-inside mt-1 space-y-1">
-        <li><span class="text-red-600">🔴 High:</span> Critical issues that may prevent reports from working</li>
-        <li><span class="text-yellow-600">🟡 Medium:</span> Important issues that may affect data accuracy</li>
-        <li><span class="text-blue-600">🔵 Low:</span> Minor issues that don't affect core functionality</li>
+        <li><span style="color: var(--color-error-600);">🔴 High:</span> Critical issues that may prevent reports from working</li>
+        <li><span style="color: var(--color-warning-600);">🟡 Medium:</span> Important issues that may affect data accuracy</li>
+        <li><span style="color: var(--color-primary-600);">🔵 Low:</span> Minor issues that don't affect core functionality</li>
       </ul>
     </div>
   </div>

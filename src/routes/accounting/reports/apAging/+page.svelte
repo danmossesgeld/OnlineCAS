@@ -24,7 +24,13 @@
   // Whether to show detailed documents in the report
   let showDetails = false;
   
-  let customParameters = [
+  let customParameters: Array<{
+    label: string;
+    type: 'text' | 'select' | 'number' | 'date';
+    id: string;
+    value: any;
+    options?: Array<{ label: string; value: any }>;
+  }> = [
     {
       label: 'Show Invoice Details',
       type: 'select',
@@ -134,52 +140,52 @@
   <div slot="report-content">
     {#if reportData.vendors.length === 0}
       <div class="text-center py-10">
-        <p class="text-gray-600">No outstanding invoices found for this period.</p>
+        <p class="text-sm" style="color: var(--color-neutral-600);">No outstanding invoices found for this period.</p>
       </div>
     {:else}
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+        <table class="min-w-full text-sm">
+          <thead>
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+              <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Vendor</th>
+              <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Total</th>
               {#each reportData.buckets as bucket}
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{bucket}</th>
+                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">{bucket}</th>
               {/each}
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody>
             {#each reportData.vendors as vendor}
               <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">
                   {vendor.name}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">
                   {formatCurrency(vendor.totalAmount)}
                 </td>
                 {#each vendor.buckets as bucket}
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">
                     {formatCurrency(bucket.amount)}
                   </td>
                 {/each}
               </tr>
-              
+
               {#if showDetails && vendor.documents.length > 0}
                 {#each vendor.documents as document}
-                  <tr class="bg-gray-50">
-                    <td class="pl-12 pr-6 py-2 whitespace-nowrap text-xs text-gray-500">
+                  <tr style="background: var(--color-neutral-50);">
+                    <td class="pl-12 pr-6 py-2 whitespace-nowrap text-xs" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">
                       {document.documentNo}
-                      <div class="text-xs text-gray-400">
-                        Date: {new Date(document.date).toLocaleDateString()} | 
-                        Due: {new Date(document.dueDate).toLocaleDateString()} | 
+                      <div class="text-xs" style="color: var(--color-neutral-400);">
+                        Date: {new Date(document.date).toLocaleDateString()} |
+                        Due: {new Date(document.dueDate).toLocaleDateString()} |
                         Age: {document.age} days
                       </div>
                     </td>
-                    <td class="px-6 py-2 whitespace-nowrap text-xs text-gray-500 text-right">
+                    <td class="px-6 py-2 whitespace-nowrap text-xs text-right" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">
                       {formatCurrency(document.amount)}
                     </td>
                     {#each reportData.buckets as _, bucketIndex}
-                      <td class="px-6 py-2 whitespace-nowrap text-xs text-gray-500 text-right">
+                      <td class="px-6 py-2 whitespace-nowrap text-xs text-right" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">
                         {document.bucketIndex === bucketIndex ? formatCurrency(document.amount) : ''}
                       </td>
                     {/each}
@@ -187,17 +193,17 @@
                 {/each}
               {/if}
             {/each}
-            
+
             <!-- Total Row -->
-            <tr class="bg-gray-100 font-bold">
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+            <tr class="font-bold" style="background: var(--color-neutral-100);">
+              <td class="px-6 py-4 whitespace-nowrap text-sm" style="color: var(--color-neutral-800);">
                 TOTAL
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800);">
                 {formatCurrency(reportData.grandTotal)}
               </td>
               {#each reportData.totals as total}
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-800);">
                   {formatCurrency(total)}
                 </td>
               {/each}

@@ -168,159 +168,159 @@
   <div slot="report-content">
     {#if reportData.revenues.length === 0 && reportData.costOfSales.length === 0 && reportData.operatingExpenses.length === 0}
       <div class="text-center py-10">
-        <p class="text-gray-600">No financial data found for this period.</p>
+        <p class="text-sm" style="color: var(--color-neutral-600);">No financial data found for this period.</p>
       </div>
     {:else}
       <div class="max-w-3xl mx-auto">
         <!-- Revenue Section -->
         <div class="mb-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-2">Revenue</h3>
+          <h3 class="text-lg font-bold mb-2" style="color: var(--color-neutral-800);">Revenue</h3>
           {#if reportData.revenues.length === 0}
-            <p class="text-sm text-gray-500 italic">No revenue data</p>
+            <p class="text-sm italic" style="color: var(--color-neutral-500);">No revenue data</p>
           {:else}
             <div class="space-y-1">
               {#each reportData.revenues as account}
                 <div class="flex justify-between">
-                  <span class="text-sm text-gray-600">{account.accountName}</span>
-                  <span class="text-sm text-gray-800 font-medium">{formatCurrency(account.balance)}</span>
+                  <span class="text-sm" style="color: var(--color-neutral-600);">{account.accountName}</span>
+                  <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(account.balance)}</span>
                 </div>
               {/each}
-              <div class="flex justify-between pt-1 border-t">
-                <span class="text-sm font-semibold text-gray-700">Total Revenue</span>
-                <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalRevenue)}</span>
+              <div class="flex justify-between pt-1" style="border-top: 1px solid var(--color-neutral-200);">
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Revenue</span>
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalRevenue)}</span>
               </div>
             </div>
           {/if}
         </div>
-        
+
         <!-- Cost of Sales Section -->
         <div class="mb-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-2">Cost of Sales</h3>
+          <h3 class="text-lg font-bold mb-2" style="color: var(--color-neutral-800);">Cost of Sales</h3>
           {#if reportData.costOfSales.length === 0}
-            <p class="text-sm text-gray-500 italic">No cost of sales data</p>
+            <p class="text-sm italic" style="color: var(--color-neutral-500);">No cost of sales data</p>
           {:else}
             <div class="space-y-1">
               {#each reportData.costOfSales as account}
                 <div class="flex justify-between">
-                  <span class="text-sm text-gray-600">{account.accountName}</span>
-                  <span class="text-sm text-gray-800 font-medium">{formatCurrency(account.balance)}</span>
+                  <span class="text-sm" style="color: var(--color-neutral-600);">{account.accountName}</span>
+                  <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(account.balance)}</span>
                 </div>
               {/each}
-              <div class="flex justify-between pt-1 border-t">
-                <span class="text-sm font-semibold text-gray-700">Total Cost of Sales</span>
-                <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalCostOfSales)}</span>
+              <div class="flex justify-between pt-1" style="border-top: 1px solid var(--color-neutral-200);">
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Cost of Sales</span>
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalCostOfSales)}</span>
               </div>
             </div>
           {/if}
         </div>
-        
+
         <!-- Gross Profit -->
-        <div class="mb-6 pt-1 pb-1 border-t border-b">
+        <div class="mb-6 pt-1 pb-1" style="border-top: 1px solid var(--color-neutral-200); border-bottom: 1px solid var(--color-neutral-200);">
           <div class="flex justify-between">
-            <span class="font-bold text-gray-800">Gross Profit</span>
-            <span class="font-bold text-gray-800">{formatCurrency(reportData.grossProfit)}</span>
+            <span class="font-bold" style="color: var(--color-neutral-800);">Gross Profit</span>
+            <span class="font-bold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.grossProfit)}</span>
           </div>
         </div>
-        
+
         <!-- Operating Expenses Section -->
         <div class="mb-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-2">Operating Expenses</h3>
+          <h3 class="text-lg font-bold mb-2" style="color: var(--color-neutral-800);">Operating Expenses</h3>
           {#if reportData.operatingExpenses.length === 0}
-            <p class="text-sm text-gray-500 italic">No operating expenses data</p>
+            <p class="text-sm italic" style="color: var(--color-neutral-500);">No operating expenses data</p>
           {:else}
             <div class="space-y-1">
               {#each reportData.operatingExpenses as account}
                 <div class="flex justify-between">
-                  <span class="text-sm text-gray-600">{account.accountName}</span>
-                  <span class="text-sm text-gray-800 font-medium">{formatCurrency(account.balance)}</span>
+                  <span class="text-sm" style="color: var(--color-neutral-600);">{account.accountName}</span>
+                  <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(account.balance)}</span>
                 </div>
               {/each}
-              <div class="flex justify-between pt-1 border-t">
-                <span class="text-sm font-semibold text-gray-700">Total Operating Expenses</span>
-                <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalOperatingExpenses)}</span>
+              <div class="flex justify-between pt-1" style="border-top: 1px solid var(--color-neutral-200);">
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Operating Expenses</span>
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalOperatingExpenses)}</span>
               </div>
             </div>
           {/if}
         </div>
-        
+
         <!-- Operating Income -->
-        <div class="mb-6 pt-1 pb-1 border-t border-b">
+        <div class="mb-6 pt-1 pb-1" style="border-top: 1px solid var(--color-neutral-200); border-bottom: 1px solid var(--color-neutral-200);">
           <div class="flex justify-between">
-            <span class="font-bold text-gray-800">Operating Income</span>
-            <span class="font-bold text-gray-800">{formatCurrency(reportData.operatingIncome)}</span>
+            <span class="font-bold" style="color: var(--color-neutral-800);">Operating Income</span>
+            <span class="font-bold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.operatingIncome)}</span>
           </div>
         </div>
-        
+
         <!-- Other Income Section -->
         {#if reportData.otherIncome.length > 0}
           <div class="mb-6">
-            <h3 class="text-lg font-bold text-gray-800 mb-2">Other Income</h3>
+            <h3 class="text-lg font-bold mb-2" style="color: var(--color-neutral-800);">Other Income</h3>
             <div class="space-y-1">
               {#each reportData.otherIncome as account}
                 <div class="flex justify-between">
-                  <span class="text-sm text-gray-600">{account.accountName}</span>
-                  <span class="text-sm text-gray-800 font-medium">{formatCurrency(account.balance)}</span>
+                  <span class="text-sm" style="color: var(--color-neutral-600);">{account.accountName}</span>
+                  <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(account.balance)}</span>
                 </div>
               {/each}
-              <div class="flex justify-between pt-1 border-t">
-                <span class="text-sm font-semibold text-gray-700">Total Other Income</span>
-                <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalOtherIncome)}</span>
+              <div class="flex justify-between pt-1" style="border-top: 1px solid var(--color-neutral-200);">
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Other Income</span>
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalOtherIncome)}</span>
               </div>
             </div>
           </div>
         {/if}
-        
+
         <!-- Other Expenses Section -->
         {#if reportData.otherExpenses.length > 0}
           <div class="mb-6">
-            <h3 class="text-lg font-bold text-gray-800 mb-2">Other Expenses</h3>
+            <h3 class="text-lg font-bold mb-2" style="color: var(--color-neutral-800);">Other Expenses</h3>
             <div class="space-y-1">
               {#each reportData.otherExpenses as account}
                 <div class="flex justify-between">
-                  <span class="text-sm text-gray-600">{account.accountName}</span>
-                  <span class="text-sm text-gray-800 font-medium">{formatCurrency(account.balance)}</span>
+                  <span class="text-sm" style="color: var(--color-neutral-600);">{account.accountName}</span>
+                  <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(account.balance)}</span>
                 </div>
               {/each}
-              <div class="flex justify-between pt-1 border-t">
-                <span class="text-sm font-semibold text-gray-700">Total Other Expenses</span>
-                <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalOtherExpenses)}</span>
+              <div class="flex justify-between pt-1" style="border-top: 1px solid var(--color-neutral-200);">
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Other Expenses</span>
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalOtherExpenses)}</span>
               </div>
             </div>
           </div>
         {/if}
-        
+
         <!-- Income Before Tax -->
-        <div class="mb-6 pt-1 pb-1 border-t border-b">
+        <div class="mb-6 pt-1 pb-1" style="border-top: 1px solid var(--color-neutral-200); border-bottom: 1px solid var(--color-neutral-200);">
           <div class="flex justify-between">
-            <span class="font-bold text-gray-800">Income Before Tax</span>
-            <span class="font-bold text-gray-800">{formatCurrency(reportData.incomeBeforeTax)}</span>
+            <span class="font-bold" style="color: var(--color-neutral-800);">Income Before Tax</span>
+            <span class="font-bold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.incomeBeforeTax)}</span>
           </div>
         </div>
-        
+
         <!-- Taxes Section -->
         {#if reportData.taxes.length > 0}
           <div class="mb-6">
-            <h3 class="text-lg font-bold text-gray-800 mb-2">Taxes</h3>
+            <h3 class="text-lg font-bold mb-2" style="color: var(--color-neutral-800);">Taxes</h3>
             <div class="space-y-1">
               {#each reportData.taxes as account}
                 <div class="flex justify-between">
-                  <span class="text-sm text-gray-600">{account.accountName}</span>
-                  <span class="text-sm text-gray-800 font-medium">{formatCurrency(account.balance)}</span>
+                  <span class="text-sm" style="color: var(--color-neutral-600);">{account.accountName}</span>
+                  <span class="text-sm font-medium" style="color: var(--color-neutral-800);">{formatCurrency(account.balance)}</span>
                 </div>
               {/each}
-              <div class="flex justify-between pt-1 border-t">
-                <span class="text-sm font-semibold text-gray-700">Total Taxes</span>
-                <span class="text-sm font-semibold text-gray-800">{formatCurrency(reportData.totalTaxes)}</span>
+              <div class="flex justify-between pt-1" style="border-top: 1px solid var(--color-neutral-200);">
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-700);">Total Taxes</span>
+                <span class="text-sm font-semibold" style="color: var(--color-neutral-800);">{formatCurrency(reportData.totalTaxes)}</span>
               </div>
             </div>
           </div>
         {/if}
-        
+
         <!-- Net Income -->
-        <div class="pt-2 pb-2 border-t border-b border-gray-300">
+        <div class="pt-2 pb-2" style="border-top: 1px solid var(--color-neutral-300); border-bottom: 1px solid var(--color-neutral-300);">
           <div class="flex justify-between">
-            <span class="font-bold text-lg text-gray-800">Net Income</span>
-            <span class="font-bold text-lg text-gray-800">{formatCurrency(reportData.netIncome)}</span>
+            <span class="font-bold text-lg" style="color: var(--color-neutral-800);">Net Income</span>
+            <span class="font-bold text-lg" style="color: var(--color-neutral-800);">{formatCurrency(reportData.netIncome)}</span>
           </div>
         </div>
       </div>

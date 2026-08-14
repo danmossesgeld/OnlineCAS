@@ -7,6 +7,7 @@ import { fly, slide } from 'svelte/transition';
 import { quintOut } from 'svelte/easing';
 import { page } from '$app/stores';
 import { onMount } from 'svelte';
+import ThemeToggle from './ThemeToggle.svelte';
 
 // Sidebar states
 let collapsed = false;
@@ -144,51 +145,41 @@ function updateViewportHeight() {
   aria-label="Toggle Sidebar"
   style="backdrop-filter: blur(10px);"
 >
-  <iconify-icon 
-    icon="material-symbols:menu" 
-    width="20" 
-    height="20" 
-    class="text-gray-700 group-hover:text-blue-600 transition-colors duration-200"
+  <iconify-icon
+    icon="material-symbols:menu"
+    width="20"
+    height="20"
+    class="transition-colors duration-200"
+    style="color: var(--color-neutral-700);"
   ></iconify-icon>
 </button>
 
 <aside
   class="w-64 glass-effect flex flex-col p-0 fixed top-0 left-0 z-40 transform transition-all duration-300 ease-in-out {collapsed ? '-translate-x-full' : 'translate-x-0'} md:translate-x-0 overflow-hidden"
-  style="height: {viewportHeight}px; border-right: 1px solid var(--color-neutral-200); box-shadow: var(--shadow-2xl);"
+  style="height: {viewportHeight}px; border-right: 1px solid var(--color-neutral-200);"
 >
-  <!-- Modern header with enhanced styling -->
-  <div class="flex flex-col py-8 px-6" style="background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); border-bottom: 1px solid var(--color-neutral-200);">
-    <div class="flex justify-center mb-4">
-      <div class="p-2 rounded-2xl" style="background: var(--color-neutral-0); box-shadow: var(--shadow-lg);">
-        <img src="/companylogo.png" alt="Company Logo" class="w-24 h-auto object-contain" />
-      </div>
-    </div>
-    <div class="text-center">
-      <h3 class="text-gradient" style="font-weight: var(--font-semibold); font-size: var(--text-sm); margin-bottom: var(--space-2);">
-        {#if $user}{$user.displayName || 'User'}{/if}
-      </h3>
-      <div class="flex items-center justify-center gap-2">
-        <div class="w-2 h-2 rounded-full" style="background: var(--color-success-500);"></div>
-        <span style="font-size: var(--text-xs); color: var(--color-neutral-600);" class="truncate max-w-full">
-          {#if $user}{$user.email}{/if}
-        </span>
-      </div>
+  <!-- Compact header: logo + user + theme toggle, single row -->
+  <div class="flex items-center gap-2.5 px-4 py-3" style="border-bottom: 1px solid var(--color-neutral-200);">
+    <img src="/companylogo.png" alt="Company Logo" class="w-8 h-8 rounded-md object-contain shrink-0" />
+    <div class="min-w-0 flex-1">
+      <p class="text-sm font-medium truncate" style="color: var(--color-neutral-800);">
+        {#if $user}{$user.displayName || $user.email?.split('@')[0] || 'User'}{/if}
+      </p>
+      <p class="text-xs truncate" style="color: var(--color-neutral-500);">
+        {#if $user}{$user.email}{/if}
+      </p>
     </div>
   </div>
-  <!-- Enhanced navigation divider -->
-  <div class="px-6 py-3">
-    <div style="height: 2px; width: 60px; margin: 0 auto; background: linear-gradient(90deg, transparent, var(--color-primary-300), transparent); border-radius: var(--radius-lg);"></div>
-  </div>
-  
+
   <!-- Navigation section with modern styling -->
   <nav class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
     <ul style="padding: var(--space-2) 0;">
       <!-- Dashboard - enhanced styling -->
-      <li class="nav-item {isActive('/main') ? 'active' : ''}" style="margin-bottom: var(--space-2);">
+      <li class="nav-item {isActive('/main') ? 'active' : ''}" style="margin-bottom: var(--space-1);">
         <a
           href="/main/dashboard"
           class="flex items-center transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {isActive('/main') ? 'background: linear-gradient(135deg, var(--color-primary-100), var(--color-primary-50)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); {isActive('/main') ? 'background: linear-gradient(135deg, var(--color-primary-100), var(--color-primary-50)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click|preventDefault={() => handleNav('/main/dashboard')}
         >
           <iconify-icon 
@@ -212,11 +203,11 @@ function updateViewportHeight() {
       </li>
       
       <!-- Customer Center with modern dropdown styling -->
-      <li class="nav-item" style="margin-bottom: var(--space-2);">
+      <li class="nav-item" style="margin-bottom: var(--space-1);">
         <button
           type="button"
           class="flex items-center w-full transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {customerCenterOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); {customerCenterOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click={() => customerCenterOpen = !customerCenterOpen}
           aria-expanded={customerCenterOpen}
         >
@@ -315,11 +306,11 @@ function updateViewportHeight() {
       </li>
       
       <!-- Vendor Center with modern dropdown styling -->
-      <li class="nav-item" style="margin-bottom: var(--space-2);">
+      <li class="nav-item" style="margin-bottom: var(--space-1);">
         <button
           type="button"
           class="flex items-center w-full transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {vendorCenterOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); {vendorCenterOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click={() => vendorCenterOpen = !vendorCenterOpen}
           aria-expanded={vendorCenterOpen}
         >
@@ -415,11 +406,11 @@ function updateViewportHeight() {
       </li>
       
       <!-- Banking (simple item) -->
-      <li class="nav-item" style="margin-bottom: var(--space-2);">
+      <li class="nav-item" style="margin-bottom: var(--space-1);">
         <a
           href="/banking"
           class="flex items-center transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {isActive('/banking') ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); {isActive('/banking') ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click|preventDefault={() => handleNav('/banking')}
         >
           <iconify-icon 
@@ -437,11 +428,11 @@ function updateViewportHeight() {
       </li>
       
       <!-- Reports section with modern dropdown styling -->
-      <li class="nav-item" style="margin-bottom: var(--space-2);">
+      <li class="nav-item" style="margin-bottom: var(--space-1);">
         <button
           type="button"
           class="flex items-center w-full transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); {reportsOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); {reportsOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
           on:click={() => reportsOpen = !reportsOpen}
           aria-expanded={reportsOpen}
         >
@@ -581,11 +572,11 @@ function updateViewportHeight() {
       </li>
       
       <!-- Inventory with dropdown -->
-      <li style="margin-bottom: var(--space-2);">
+      <li style="margin-bottom: var(--space-1);">
         <button
           type="button"
           class="nav-item flex items-center w-full transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {inventoryOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {inventoryOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
           on:click={() => inventoryOpen = !inventoryOpen}
           aria-expanded={inventoryOpen}
         >
@@ -636,11 +627,11 @@ function updateViewportHeight() {
       </li>
       
       <!-- Accounting with dropdown -->
-      <li style="margin-bottom: var(--space-2);">
+      <li style="margin-bottom: var(--space-1);">
         <button
           type="button"
           class="nav-item flex items-center w-full transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {accountingOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {accountingOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
           on:click={() => accountingOpen = !accountingOpen}
           aria-expanded={accountingOpen}
         >
@@ -791,11 +782,11 @@ function updateViewportHeight() {
       </li>
       
       <!-- Masterlist with animation -->
-      <li style="margin-bottom: var(--space-2);">
+      <li style="margin-bottom: var(--space-1);">
         <button
           type="button"
           class="nav-item flex items-center w-full transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {masterlistOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {masterlistOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
           on:click={() => masterlistOpen = !masterlistOpen}
           aria-expanded={masterlistOpen}
         >
@@ -926,11 +917,11 @@ function updateViewportHeight() {
       </li>
       
       <!-- Other List with animation -->
-      <li style="margin-bottom: var(--space-2);">
+      <li style="margin-bottom: var(--space-1);">
         <button
           type="button"
           class="nav-item flex items-center w-full transition-all duration-200 group"
-          style="padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {otherlistOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {otherlistOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
           on:click={() => otherlistOpen = !otherlistOpen}
           aria-expanded={otherlistOpen}
         >
@@ -1102,26 +1093,19 @@ function updateViewportHeight() {
     </ul>
   </nav>
   
-  <!-- User controls with sign out and profile options -->
+  <!-- User controls: theme toggle + sign out -->
   <div class="mt-auto">
-    <div class="px-3 pt-3 pb-2">
-      <div class="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg mb-2">
-        <div class="flex items-center">
-          <div class="bg-blue-100 rounded-full p-1.5 mr-2">
-            <iconify-icon icon="material-symbols:support-agent" width="16" height="16" class="text-blue-600"></iconify-icon>
-          </div>
-          <span class="text-xs font-medium text-blue-800">Need help?</span>
-        </div>
-        <button class="text-xs text-blue-600 hover:text-blue-800 font-medium">Support</button>
+    <div class="px-3 py-3 flex flex-col gap-2" style="border-top: 1px solid var(--color-neutral-200);">
+      <div class="flex justify-center">
+        <ThemeToggle />
       </div>
-    </div>
-    <div class="px-3 py-3 border-t border-gray-100 bg-gray-50">
       <button
-        class="flex items-center justify-between w-full px-4 py-2.5 text-sm font-medium rounded-lg bg-white border border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all duration-200 shadow-sm"
+        class="flex items-center justify-between w-full px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors"
+        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
         on:click={handleSignOut}
       >
         <div class="flex items-center">
-          <iconify-icon icon="material-symbols:logout" width="18" height="18" class="mr-2 text-gray-500"></iconify-icon>
+          <iconify-icon icon="material-symbols:logout" width="18" height="18" class="mr-2" style="color: var(--color-neutral-400);"></iconify-icon>
           <span>Sign Out</span>
         </div>
         <iconify-icon icon="material-symbols:arrow-right-alt" width="16" height="16"></iconify-icon>

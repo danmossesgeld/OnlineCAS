@@ -22,12 +22,11 @@
     loadDocument();
   }
   
-  // Adjust page title based on mode
-  $: pageTitle = {
-    'create': 'Create Inventory Adjustment',
-    'edit': 'Edit Inventory Adjustment',
-    'view': 'View Inventory Adjustment'
-  }[mode];
+  // Show the actual adjustment number once known, instead of a generic "Edit/View Inventory
+  // Adjustment" label — falls back to a mode label for a brand-new, not-yet-saved adjustment.
+  $: pageTitle = isCreateMode
+    ? 'New Inventory Adjustment'
+    : (formData.originalAdjustmentNo ? formData.originalAdjustmentNo : (mode === 'view' ? 'View Inventory Adjustment' : 'Edit Inventory Adjustment'));
 
   // Define adjustment types
   const adjustmentTypes = [
@@ -42,10 +41,14 @@
   let unitOptions: {label: string, value: any}[] = [];
   let accountOptions: {label: string, value: any}[] = [];
 
-  createFirestoreOptionsStore('warehouses', 'name', 'id').subscribe(opts => warehouseOptions = opts);
+  // NOTE: 'warehouses' and bare 'accounts' used to resolve to unmanaged otherlist/* paths
+  // (listdatabase/otherlist/warehouses, listdatabase/otherlist/accounts), which don't exist
+  // anywhere else in the app, making this form unsubmittable. "Locations" is the real,
+  // managed warehouse-equivalent list, and the Chart of Accounts lives under masterlist/accounts.
+  createFirestoreOptionsStore('otherlist/locations', 'name', 'id').subscribe(opts => warehouseOptions = opts);
   createFirestoreOptionsStore('items', 'name', 'id').subscribe(opts => itemOptions = opts);
   createFirestoreOptionsStore('units').subscribe(opts => unitOptions = opts);
-  createFirestoreOptionsStore('accounts', 'name', 'id').subscribe(opts => accountOptions = opts);
+  createFirestoreOptionsStore('masterlist/accounts', 'name', 'id').subscribe(opts => accountOptions = opts);
 
   // Define the type for our form data to include all fields we need
   type FormDataType = {
@@ -370,7 +373,7 @@
 
     } catch (error) {
       console.error('Error saving inventory adjustment:', error);
-      alert('Failed to save inventory adjustment. Please try again.');
+      alert('Failed to save inventory adjustment: ' + (error instanceof Error ? error.message : 'Please try again.'));
     }
   }
 
@@ -379,8 +382,7 @@
     { label: 'Adjustment Date', name: 'adjustmentDate', type: 'date', required: true },
     { label: 'Warehouse', name: 'warehouse', type: 'select', options: warehouseOptions, required: true },
     { label: 'Reference #', name: 'referenceNo', type: 'text', placeholder: 'e.g. PO-001 or count reference' },
-    { label: 'Adjustment Account', name: 'account', type: 'select', options: accountOptions, required: true },
-    { label: 'Remarks', name: 'remarks', type: 'textarea', placeholder: 'Add remarks or reason for adjustment' }
+    { label: 'Adjustment Account', name: 'account', type: 'select', options: accountOptions, required: true }
   ];
 
   $: columns = [
@@ -399,6 +401,21 @@
 </script>
 
 <FormLayout title={pageTitle} backPath="/inventory/adjustment/list">
+  <svelte:fragment slot="header-actions">
+    <div class="w-full sm:w-64">
+      <label for="field-remarks" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Remarks</label>
+      <textarea
+        id="field-remarks"
+        rows="2"
+        class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
+        style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        placeholder="Add remarks or reason for adjustment"
+        bind:value={formData.remarks}
+        disabled={isViewMode}
+      ></textarea>
+    </div>
+  </svelte:fragment>
+
   <!-- Fields section -->
   <FormSection withSeparator={false}>
     <TxnFields {fields} bind:formData disabled={isViewMode} />
@@ -411,6 +428,7 @@
     actionLabel="Add Item"
     onAction={addItem}
     isItemTable={true}
+    grow={true}
     columns={columns}
     items={lineItems}
     onAdd={!isViewMode ? addItem : undefined}
@@ -432,16 +450,16 @@
     readOnly={isViewMode}
   >
     <svelte:fragment slot="summary">
-      <div class="w-full p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <h3 class="text-lg font-semibold mb-3 text-gray-800">Summary</h3>
-        <div class="space-y-2">
-          <div class="flex justify-between items-center">
-            <span class="text-gray-600">Total Items:</span>
-            <span class="font-medium">{itemCount}</span>
+      <div class="w-full p-4">
+        <h3 class="text-lg font-semibold mb-3" style="color: var(--color-neutral-800);">Summary</h3>
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
+          <div class="flex items-baseline gap-1.5">
+            <span style="color: var(--color-neutral-500);">Total Items:</span>
+            <span class="font-semibold" style="color: var(--color-neutral-800);">{itemCount}</span>
           </div>
-          <div class="flex justify-between items-center border-t border-gray-200 pt-2">
-            <span class="text-gray-600">Total Value:</span>
-            <span class="font-semibold text-lg">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'PHP' }).format(totalValue)}</span>
+          <div class="flex items-baseline gap-1.5">
+            <span style="color: var(--color-neutral-500);">Total Value:</span>
+            <span class="font-semibold text-lg" style="color: var(--color-neutral-800);">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'PHP' }).format(totalValue)}</span>
           </div>
         </div>
       </div>

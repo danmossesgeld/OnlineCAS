@@ -2,9 +2,10 @@
   import { onMount } from 'svelte';
   import FormLayout from '$lib/components/FormLayout.svelte';
   import FormSection from '$lib/components/FormSection.svelte';
+  import { theme } from '$lib/stores/themeStore';
   import { formatCurrency } from '$lib/utils/formatters';
   import { queryCollectionDocs } from '$lib/utils/firestoreCrud';
-  
+
   // Dashboard data
   let isLoading: boolean = true;
   let revenueData: number[] = [];
@@ -86,6 +87,17 @@
     script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
     script.async = true;
     script.onload = () => {
+      const Chart = (window as any).Chart;
+      if (Chart) {
+        // Match chart text/gridlines to the active theme (Chart.js draws on <canvas>,
+        // so it can't pick up CSS variables — set its defaults explicitly instead).
+        const isDark = $theme === 'dark';
+        const axisColor = isDark ? '#9aa8c4' : '#64748b';
+        const gridColor = isDark ? 'rgba(154,168,196,0.15)' : 'rgba(100,116,139,0.12)';
+        Chart.defaults.color = axisColor;
+        Chart.defaults.borderColor = gridColor;
+        Chart.defaults.plugins.legend.labels.color = axisColor;
+      }
       // Revenue vs Expense line chart
       const ctx1 = document.getElementById('revExpChart') as HTMLCanvasElement | null;
       if (ctx1 && (window as any).Chart) {
@@ -406,103 +418,84 @@
 
 <FormLayout title="Financial Dashboard">
   {#if isLoading}
-    <div class="p-10 text-center">
+    <div class="p-10 text-center" style="color: var(--color-neutral-500);">
       <div class="animate-pulse text-lg">Loading dashboard data...</div>
     </div>
   {:else}
     <!-- Key metrics section -->
     <FormSection title="Key Financial Metrics">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <dt class="text-sm font-medium text-gray-500 truncate">Cash Balance</dt>
-            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-              {formatCurrency(cashBalance)}
-            </dd>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="summary-card primary">
+          <div class="summary-card-content">
+            <div class="summary-card-label">Cash Balance</div>
+            <div class="summary-card-value">{formatCurrency(cashBalance)}</div>
           </div>
         </div>
-        
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <dt class="text-sm font-medium text-gray-500 truncate">Accounts Receivable</dt>
-            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-              {formatCurrency(arTotal)}
-            </dd>
+
+        <div class="summary-card primary">
+          <div class="summary-card-content">
+            <div class="summary-card-label">Accounts Receivable</div>
+            <div class="summary-card-value">{formatCurrency(arTotal)}</div>
           </div>
         </div>
-        
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <dt class="text-sm font-medium text-gray-500 truncate">Accounts Payable</dt>
-            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-              {formatCurrency(apTotal)}
-            </dd>
+
+        <div class="summary-card warning">
+          <div class="summary-card-content">
+            <div class="summary-card-label">Accounts Payable</div>
+            <div class="summary-card-value">{formatCurrency(apTotal)}</div>
           </div>
         </div>
-        
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <dt class="text-sm font-medium text-gray-500 truncate">Current Ratio</dt>
-            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-              {currentRatio.toFixed(2)}
-            </dd>
+
+        <div class="summary-card success">
+          <div class="summary-card-content">
+            <div class="summary-card-label">Current Ratio</div>
+            <div class="summary-card-value">{currentRatio.toFixed(2)}</div>
           </div>
         </div>
-        
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <dt class="text-sm font-medium text-gray-500 truncate">Quick Ratio</dt>
-            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-              {quickRatio.toFixed(2)}
-            </dd>
-          </div>
-        </div>
-        
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <dt class="text-sm font-medium text-gray-500 truncate">Unposted Transactions</dt>
-            <dd class="mt-1 text-3xl font-semibold {unpostedTransactions > 0 ? 'text-red-600' : 'text-green-600'}">
-              {unpostedTransactions}
-            </dd>
+
+        <div class="summary-card {unpostedTransactions > 0 ? 'error' : 'success'}">
+          <div class="summary-card-content">
+            <div class="summary-card-label">Unposted Transactions</div>
+            <div class="summary-card-value" style={unpostedTransactions > 0 ? 'color: var(--color-error-600);' : ''}>{unpostedTransactions}</div>
           </div>
         </div>
       </div>
     </FormSection>
-    
+
     <!-- Monthly performance chart section (Chart.js) -->
     <FormSection title="Monthly Performance" withSeparator={true}>
-      <div class="bg-white rounded-lg shadow p-4">
+      <div class="rounded-lg border p-4" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200);">
         <canvas id="revExpChart" height="120"></canvas>
       </div>
     </FormSection>
 
     <FormSection title="AR vs AP" withSeparator={true}>
-      <div class="bg-white rounded-lg shadow p-4">
+      <div class="rounded-lg border p-4" style="background: var(--color-neutral-0); border-color: var(--color-neutral-200);">
         <canvas id="arApChart" height="80"></canvas>
       </div>
     </FormSection>
-    
+
     <!-- Top customers and vendors -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <FormSection title="Top Customers" withSeparator={true}>
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+          <table class="min-w-full text-sm">
+            <thead>
               <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding Balance</th>
+                <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Customer</th>
+                <th scope="col" class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Outstanding Balance</th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
+            <tbody>
               {#if topCustomers.length === 0}
                 <tr>
-                  <td colspan="2" class="px-6 py-4 text-center text-sm text-gray-500">No customers found</td>
+                  <td colspan="2" class="px-3 py-4 text-center text-sm" style="color: var(--color-neutral-500);">No customers found</td>
                 </tr>
               {:else}
                 {#each topCustomers as customer}
                   <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{customer.name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">
+                    <td class="px-3 py-2.5 whitespace-nowrap text-sm font-medium" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{customer.name}</td>
+                    <td class="px-3 py-2.5 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">
                       {formatCurrency(customer.totalAmount)}
                     </td>
                   </tr>
@@ -512,26 +505,26 @@
           </table>
         </div>
       </FormSection>
-      
+
       <FormSection title="Top Vendors" withSeparator={true}>
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+          <table class="min-w-full text-sm">
+            <thead>
               <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
-                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding Balance</th>
+                <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Vendor</th>
+                <th scope="col" class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Outstanding Balance</th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
+            <tbody>
               {#if topVendors.length === 0}
                 <tr>
-                  <td colspan="2" class="px-6 py-4 text-center text-sm text-gray-500">No vendors found</td>
+                  <td colspan="2" class="px-3 py-4 text-center text-sm" style="color: var(--color-neutral-500);">No vendors found</td>
                 </tr>
               {:else}
                 {#each topVendors as vendor}
                   <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{vendor.name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">
+                    <td class="px-3 py-2.5 whitespace-nowrap text-sm font-medium" style="color: var(--color-neutral-800); border-bottom: 1px solid var(--color-neutral-100);">{vendor.name}</td>
+                    <td class="px-3 py-2.5 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">
                       {formatCurrency(vendor.totalAmount)}
                     </td>
                   </tr>
@@ -542,36 +535,40 @@
         </div>
       </FormSection>
     </div>
-    
+
     <!-- Recent transactions -->
     <FormSection title="Recent Transactions" withSeparator={true}>
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+        <table class="min-w-full text-sm">
+          <thead>
             <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-              <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Date</th>
+              <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Reference</th>
+              <th scope="col" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Description</th>
+              <th scope="col" class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Amount</th>
+              <th scope="col" class="px-3 py-2 text-center text-xs font-medium uppercase tracking-wide" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-200);">Status</th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody>
             {#if recentTransactions.length === 0}
               <tr>
-                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No recent transactions found</td>
+                <td colspan="5" class="px-3 py-4 text-center text-sm" style="color: var(--color-neutral-500);">No recent transactions found</td>
               </tr>
             {:else}
               {#each recentTransactions as transaction}
+                {@const statusColor = transaction.isPosted ? '--color-success-600' : '--color-warning-600'}
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{transaction.date.toLocaleDateString()}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{transaction.reference}</td>
-                  <td class="px-6 py-4 text-sm text-gray-500">{transaction.description}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">
+                  <td class="px-3 py-2.5 whitespace-nowrap text-sm" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">{transaction.date.toLocaleDateString()}</td>
+                  <td class="px-3 py-2.5 whitespace-nowrap text-sm" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">{transaction.reference}</td>
+                  <td class="px-3 py-2.5 text-sm" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">{transaction.description}</td>
+                  <td class="px-3 py-2.5 whitespace-nowrap text-sm text-right" style="color: var(--color-neutral-500); border-bottom: 1px solid var(--color-neutral-100);">
                     {formatCurrency(transaction.amount)}
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
-                    <span class={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${transaction.isPosted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                  <td class="px-3 py-2.5 whitespace-nowrap text-center text-sm" style="border-bottom: 1px solid var(--color-neutral-100);">
+                    <span
+                      class="px-2 inline-flex text-xs leading-5 font-medium rounded-full"
+                      style={`color: var(${statusColor}); background: color-mix(in srgb, var(${statusColor}) 14%, transparent);`}
+                    >
                       {transaction.isPosted ? 'Posted' : 'Unposted'}
                     </span>
                   </td>

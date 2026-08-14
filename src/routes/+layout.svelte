@@ -5,6 +5,7 @@
 	import { getAuth, onAuthStateChanged } from 'firebase/auth';
 	import { app } from '../lib/firebase';
 	import { user } from '../lib/user';
+	import { theme } from '$lib/stores/themeStore';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 
@@ -15,6 +16,8 @@
 	}
 
 	onMount(() => {
+		theme.init();
+
 		const auth = getAuth(app);
 		onAuthStateChanged(auth, (u) => {
 			user.set(u);
@@ -30,13 +33,13 @@
 	<!-- Mobile sidebar toggle button is handled in the Sidebar component -->
 	<Sidebar />
 
-	<!-- Main content area with left margin to accommodate fixed sidebar -->
-	<div class="min-h-screen bg-[#f6f7fb] transition-all duration-300 md:ml-64">
-		<div class="flex flex-col h-full p-4">
-			<main class="flex-1 overflow-auto p-4 md:p-8 bg-white rounded-xl shadow-lg">
-				<slot />
-			</main>
-		</div>
+	<!-- Main content area with left margin to accommodate fixed sidebar. This is the
+	     single page surface — inner containers (FormLayout, ListContainer, ...) should
+	     not add their own competing card/shadow on top of this one. -->
+	<div class="min-h-screen transition-colors duration-200 md:ml-64" style="background: var(--color-neutral-50);">
+		<main class="min-h-screen flex flex-col overflow-auto p-3 sm:p-4 md:p-6">
+			<slot />
+		</main>
 	</div>
 {:else}
 	<slot />

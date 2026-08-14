@@ -9,7 +9,7 @@
     { label: 'Date', key: 'invoiceDate' },
     { label: 'Due Date', key: 'dueDate' },
     // Amount should show the original invoice total, not the remaining balance
-    { label: 'Amount', key: 'amount', render: (row: any) => `<span class=\"font-medium text-gray-900\">${currency((row.netSales || 0) + (row.vat || 0))}</span>` },
+    { label: 'Amount', key: 'amount', render: (row: any) => `<span class=\"font-medium\" style=\"color: var(--color-neutral-800);\">${currency((row.netSales || 0) + (row.vat || 0))}</span>` },
     // Show outstanding separately using totalDue (can be 0 when fully paid)
     { label: 'Outstanding', key: 'totalDue' },
     { label: 'Status', key: 'status' },

@@ -364,8 +364,7 @@
   }
 </script>
 
-<div class="bg-white rounded-2xl shadow-xl p-8">
-  <MasterListContainer
+<MasterListContainer
     {rootCollection}
     {parentCollection}
     {subCollectionName}
@@ -384,7 +383,6 @@
       <button class="btn btn-ghost btn-xs" aria-label="Delete item" on:click={() => handleDelete(row)}><iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon></button>
     </svelte:fragment>
   </MasterListContainer>
-</div>
 
 {#if showModal}
   <ModalForm

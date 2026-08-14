@@ -90,11 +90,22 @@
     { label: 'Cost of Goods Sold', code: 'COGS', value: 'cogs', category: 'Expense', normalBalance: 'debit' }
   ];
 
-  // Financial statement classifications
+  // Financial statement classifications.
+  // These values must match reportingService.ts's FSClassification enum exactly (kebab-case) —
+  // Balance Sheet / Income Statement report pages group accounts by this field, so a mismatch
+  // here silently excludes accounts from every generated report.
   const fsClassifications = [
-    { label: 'Balance Sheet', value: 'balance_sheet' },
-    { label: 'Income Statement', value: 'income_statement' },
-    { label: 'Cash Flow', value: 'cash_flow' }
+    { label: 'Current Asset', value: 'current-asset' },
+    { label: 'Non-Current Asset', value: 'non-current-asset' },
+    { label: 'Current Liability', value: 'current-liability' },
+    { label: 'Non-Current Liability', value: 'non-current-liability' },
+    { label: 'Equity', value: 'equity' },
+    { label: 'Revenue', value: 'revenue' },
+    { label: 'Cost of Sales', value: 'cost-of-sales' },
+    { label: 'Operating Expense', value: 'operating-expense' },
+    { label: 'Other Income', value: 'other-income' },
+    { label: 'Other Expense', value: 'other-expense' },
+    { label: 'Tax', value: 'tax' }
   ];
 
   // Define form data type with an index signature to allow dynamic property access
@@ -195,7 +206,7 @@
       color: 'outline',
       icon: 'material-symbols:description',
       onClick: () => {
-        const sample = 'code,name,description,accountType,fsClassification,glCode,glName,slCode,slName,parentId,isActive,isSystem\n1000,Current Assets,Current asset accounts,asset,balance_sheet,100,Current Assets,,,,,true,false\n1010,Cash and Cash Equivalents,Cash accounts,asset,balance_sheet,101,Cash,,,1000,true,false\n1011,Cash on Hand,Physical cash in office,asset,balance_sheet,1011,Petty Cash,,,1010,true,false\n1012,Cash in Bank - BPI,Main operating account,asset,balance_sheet,1012,BPI Checking,,,1010,true,false\n1020,Accounts Receivable,Customer receivables,asset,balance_sheet,102,A/R,,,1000,true,false\n2000,Current Liabilities,Current liability accounts,liability,balance_sheet,200,Current Liab,,,,,true,false\n2010,Accounts Payable,Vendor payables,liability,balance_sheet,201,A/P,,,2000,true,false\n3000,Owner Equity,Equity accounts,equity,balance_sheet,300,Equity,,,,,true,false\n4000,Revenue,Income accounts,revenue,income_statement,400,Revenue,,,,,true,false\n4010,Sales Revenue,Product sales,revenue,income_statement,401,Sales,,,4000,true,false\n5000,Operating Expenses,Business expenses,expense,income_statement,500,Expenses,,,,,true,false\n5010,Office Supplies,Office supply expenses,expense,income_statement,501,Supplies,,,5000,true,false';
+        const sample = 'code,name,description,accountType,fsClassification,glCode,glName,slCode,slName,parentId,isActive,isSystem\n1000,Current Assets,Current asset accounts,asset,current-asset,100,Current Assets,,,,,true,false\n1010,Cash and Cash Equivalents,Cash accounts,asset,current-asset,101,Cash,,,1000,true,false\n1011,Cash on Hand,Physical cash in office,asset,current-asset,1011,Petty Cash,,,1010,true,false\n1012,Cash in Bank - BPI,Main operating account,asset,current-asset,1012,BPI Checking,,,1010,true,false\n1020,Accounts Receivable,Customer receivables,asset,current-asset,102,A/R,,,1000,true,false\n2000,Current Liabilities,Current liability accounts,liability,current-liability,200,Current Liab,,,,,true,false\n2010,Accounts Payable,Vendor payables,liability,current-liability,201,A/P,,,2000,true,false\n3000,Owner Equity,Equity accounts,equity,equity,300,Equity,,,,,true,false\n4000,Revenue,Income accounts,revenue,revenue,400,Revenue,,,,,true,false\n4010,Sales Revenue,Product sales,revenue,revenue,401,Sales,,,4000,true,false\n5000,Operating Expenses,Business expenses,expense,operating-expense,500,Expenses,,,,,true,false\n5010,Office Supplies,Office supply expenses,expense,operating-expense,501,Supplies,,,5000,true,false';
         const blob = new Blob([sample], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -263,17 +274,11 @@
     parentAccountOptions = [{ label: '-- No Parent --', value: '' }, ...opts];
   });
 
-  // For indentation visualize child accounts: assume codes like 10100 parent, 10101 child
-  function computeDepthFromCode(code: any): number {
-    const str = String(code || '');
-    // Count trailing zeros segments reduction as hierarchy hint; fallback to 0
-    if (!/^[0-9]+$/.test(str)) return 0;
-    // Example: 10100 -> depth 0, 10101 -> depth 1
-    // Basic heuristic: children often share prefix; we'll infer via presence of parentId when available
-    return 0;
-  }
-
-  // Table columns with render functions for indentation and proper display
+  // Table columns with render functions for indentation and proper display.
+  // These return raw HTML (rendered via {@html} in FireTable), so theme-aware colors
+  // must be inline styles referencing CSS vars — a hardcoded Tailwind class like
+  // text-gray-700 would stay a fixed dark gray and become illegible in dark mode.
+  const rowTextStyle = 'color: var(--color-neutral-700);';
   const columns = [
     { label: 'Code', key: 'code', width: '10%' },
     {
@@ -283,16 +288,16 @@
       render: (row: any) => {
         const depth = typeof row._depth === 'number' ? row._depth : 0;
         const pad = '&nbsp;'.repeat(depth * 16);
-        const bullet = depth > 0 ? '<span class="inline-block w-2 h-2 rounded-full bg-indigo-400 mr-2"></span>' : '';
-        return `${pad}${bullet}<span class=\"text-gray-700\">${row.name || ''}</span>`;
+        const bullet = depth > 0 ? '<span class="inline-block w-2 h-2 rounded-full mr-2" style="background: var(--color-primary-400);"></span>' : '';
+        return `${pad}${bullet}<span style=\"${rowTextStyle}\">${row.name || ''}</span>`;
       }
     },
-    { label: 'Type', key: 'accountType', width: '12%', render: (row: any) => `<span class=\"text-gray-700\">${formatAccountType(row.accountType)}</span>` },
-    { label: 'Normal Balance', key: 'accountType', width: '12%', render: (row: any) => `<span class=\"text-gray-700\">${accountTypes.find(t => t.value === row.accountType)?.normalBalance || ''}</span>` },
-    { label: 'Classification', key: 'fsClassification', width: '16%', render: (row: any) => `<span class=\"text-gray-700\">${formatClassification(row.fsClassification)}</span>` },
+    { label: 'Type', key: 'accountType', width: '12%', render: (row: any) => `<span style=\"${rowTextStyle}\">${formatAccountType(row.accountType)}</span>` },
+    { label: 'Normal Balance', key: 'accountType', width: '12%', render: (row: any) => `<span style=\"${rowTextStyle}\">${accountTypes.find(t => t.value === row.accountType)?.normalBalance || ''}</span>` },
+    { label: 'Classification', key: 'fsClassification', width: '16%', render: (row: any) => `<span style=\"${rowTextStyle}\">${formatClassification(row.fsClassification)}</span>` },
     { label: 'GL Code', key: 'glCode', width: '8%' },
-    { label: 'Parent', key: 'parentName', width: '10%', render: (row: any) => `<span class=\"text-gray-700\">${row.parentName || '-'}</span>` },
-    { label: 'Status', key: 'isActive', width: '8%', render: (row: any) => `<span class=\"text-gray-700\">${row.isActive ? 'Active' : 'Inactive'}</span>` }
+    { label: 'Parent', key: 'parentName', width: '10%', render: (row: any) => `<span style=\"${rowTextStyle}\">${row.parentName || '-'}</span>` },
+    { label: 'Status', key: 'isActive', width: '8%', render: (row: any) => `<span style=\"${rowTextStyle}\">${row.isActive ? 'Active' : 'Inactive'}</span>` }
   ];
 
   // Format account type for display
@@ -459,8 +464,7 @@
   ];
 </script>
 
-<div class="bg-white rounded-2xl shadow-xl p-8">
-  <MasterListContainer
+<MasterListContainer
     {rootCollection}
     {parentCollection}
     {subCollectionName}
@@ -493,7 +497,6 @@
       </button>
     </svelte:fragment>
   </MasterListContainer>
-</div>
 
 {#if showModal}
   <ModalForm

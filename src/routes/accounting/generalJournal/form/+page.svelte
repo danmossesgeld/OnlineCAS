@@ -6,6 +6,7 @@
   import { onMount } from 'svelte';
   import { createFirestoreOptionsStore, type FirestoreOption } from '$lib/utils/firestoreOptions';
   import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { isDateInClosedPeriod } from '$lib/utils/accountingService';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   
@@ -21,12 +22,11 @@
     loadDocument();
   }
   
-  // Adjust page title based on mode
-  $: pageTitle = {
-    'create': 'Create Journal Entry',
-    'edit': 'Edit Journal Entry',
-    'view': 'View Journal Entry'
-  }[mode];
+  // Show the actual reference number once known, instead of a generic "Edit/View Journal
+  // Entry" label — falls back to a mode label for a brand-new, not-yet-saved entry.
+  $: pageTitle = isCreateMode
+    ? 'New Journal Entry'
+    : (formData.referenceNo ? formData.referenceNo : (mode === 'view' ? 'View Journal Entry' : 'Edit Journal Entry'));
 
   // Type definition for account options with account type
   type AccountOption = FirestoreOption & {
@@ -358,7 +358,14 @@
         alert('All lines must have an account and either a debit or credit amount');
         return;
       }
-      
+
+      // Prevent posting into a closed fiscal period
+      const periodCheck = await isDateInClosedPeriod(formData.journalDate);
+      if (periodCheck.closed) {
+        alert(`Cannot save: the fiscal period${periodCheck.periodLabel ? ` "${periodCheck.periodLabel}"` : ''} is closed. Reopen it from Period Closing or choose a different date.`);
+        return;
+      }
+
       // Generate a reference number if none exists
       if (!formData.referenceNo) {
         formData.referenceNo = `JE-${Date.now().toString().substring(7)}`;
@@ -400,7 +407,7 @@
       
     } catch (error) {
       console.error('Error saving journal entry:', error);
-      alert('Failed to save journal entry. Please try again.');
+      alert('Failed to save journal entry: ' + (error instanceof Error ? error.message : 'Please try again.'));
     }
   }
 
@@ -409,8 +416,7 @@
     { label: 'Journal Date', name: 'journalDate', type: 'date', required: true },
     { label: 'Reference No', name: 'referenceNo', type: 'text', placeholder: 'Auto-generated if empty' },
     { label: 'Description', name: 'description', type: 'text', placeholder: 'Brief description of this entry' },
-    { label: 'Memo', name: 'memo', type: 'textarea', placeholder: 'Additional notes (optional)' },
-    { 
+    {
       label: 'Status', 
       name: 'status', 
       type: 'select', 
@@ -506,6 +512,21 @@
 </script>
 
 <FormLayout title={pageTitle} backPath="/accounting/generalJournal/list">
+  <svelte:fragment slot="header-actions">
+    <div class="w-full sm:w-64">
+      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+      <textarea
+        id="field-memo"
+        rows="2"
+        class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
+        style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        placeholder="Add a memo"
+        bind:value={formData.memo}
+        disabled={isViewMode}
+      ></textarea>
+    </div>
+  </svelte:fragment>
+
   <!-- Fields section -->
   <FormSection withSeparator={false}>
     <TxnFields {fields} bind:formData disabled={isViewMode} />
@@ -518,6 +539,7 @@
     actionLabel="Add Line"
     onAction={addLine}
     isItemTable={true}
+    grow={true}
     columns={columns}
     items={lines}
     onAdd={!isViewMode ? addLine : undefined}
@@ -538,65 +560,71 @@
     readOnly={isViewMode}
   >
     <!-- Custom summary in a slot -->
-    <div slot="summary" class="bg-white p-4 rounded-lg shadow-sm">
-      <h2 class="text-lg font-semibold text-gray-800 mb-4">Balance Summary</h2>
-      
+    <div slot="summary" class="p-4">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-neutral-800);">Balance Summary</h2>
+
       <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
         <div>
           <div class="flex justify-between items-center mb-2">
-            <span class="text-gray-600">Total Debit:</span>
-            <span class="font-medium">₱{totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+            <span style="color: var(--color-neutral-600);">Total Debit:</span>
+            <span class="font-medium" style="color: var(--color-neutral-800);">₱{totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
           </div>
         </div>
-        
+
         <div>
           <div class="flex justify-between items-center mb-2">
-            <span class="text-gray-600">Total Credit:</span>
-            <span class="font-medium">₱{totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+            <span style="color: var(--color-neutral-600);">Total Credit:</span>
+            <span class="font-medium" style="color: var(--color-neutral-800);">₱{totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
           </div>
         </div>
       </div>
-      
+
       <!-- Difference and Balance Status -->
-      <div class="flex justify-between font-bold text-base mt-3 pt-2 border-t border-gray-300 items-center">
+      <div class="flex justify-between font-bold text-base mt-3 pt-2 items-center" style="border-top: 1px solid var(--color-neutral-200); color: var(--color-neutral-800);">
         <span class="flex items-center">
           <span>Difference:</span>
         </span>
-        <span class={isBalanced ? "text-green-600 bg-green-50 px-3 py-1 rounded-lg border border-green-200" : "text-red-600 bg-red-50 px-3 py-1 rounded-lg border border-red-200"}>
+        <span
+          class="px-3 py-1 rounded-lg"
+          style={`color: var(${isBalanced ? '--color-success-600' : '--color-error-600'}); background: color-mix(in srgb, var(${isBalanced ? '--color-success-600' : '--color-error-600'}) 14%, transparent); border: 1px solid color-mix(in srgb, var(${isBalanced ? '--color-success-600' : '--color-error-600'}) 30%, transparent);`}
+        >
           ₱{Math.abs(totalDebit - totalCredit).toLocaleString(undefined, {minimumFractionDigits: 2})}
         </span>
       </div>
-      
+
       <div class="mt-2 text-center">
         {#if isBalanced}
-          <p class="text-green-600 text-sm font-medium">✓ Journal entry is balanced</p>
+          <p class="text-sm font-medium" style="color: var(--color-success-600);">✓ Journal entry is balanced</p>
         {:else}
-          <p class="text-red-600 text-sm font-medium">⚠ Journal entry is not balanced</p>
+          <p class="text-sm font-medium" style="color: var(--color-error-600);">⚠ Journal entry is not balanced</p>
         {/if}
       </div>
     </div>
-    
+
     <!-- Custom buttons slot to add disabled state -->
     <div slot="custom-buttons">
       <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
         {#if !isViewMode}
           <button
-            class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-6 py-2 text-white rounded transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            style="background: var(--color-primary-600);"
             on:click={handleSave}
             disabled={!isBalanced || lines.some(line => !line.accountId || (line.debit === 0 && line.credit === 0))}
           >
             {isCreateMode ? 'Create Journal Entry' : 'Update Journal Entry'}
           </button>
-          
+
           <button
-            class="px-6 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-150"
+            class="px-6 py-2 rounded transition-all duration-150"
+            style="border: 1px solid var(--color-neutral-300); color: var(--color-neutral-700);"
             on:click={() => goto('/accounting/generalJournal/list')}
           >
             Cancel
           </button>
         {:else}
           <button
-            class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-150"
+            class="px-6 py-2 text-white rounded transition-all duration-150"
+            style="background: var(--color-primary-600);"
             on:click={() => goto('/accounting/generalJournal/list')}
           >
             Back to List
