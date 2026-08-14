@@ -255,37 +255,42 @@
     formData.totalAmount = formData.subtotal + formData.taxAmount;
   }
 
-  async function saveReceivingReport() {
+  // status defaults to 'Posted' (the primary Create/Update button); the secondary
+  // "Save as Draft" button passes 'Draft' explicitly. Previously formData.status was
+  // hardcoded to 'Draft' at init and never changed, so the journal-entry-on-post branch
+  // below was permanently dead — Receiving Reports never reached the GL.
+  async function saveReceivingReport(status: 'Draft' | 'Posted' = 'Posted') {
     try {
       if (isViewMode) {
         goto('/vendorCenter/receivingReport/list');
         return;
       }
-      
+
       isSaving = true;
-      
+
       // Validate required fields
       if (!formData.vendor) {
         alert('Please select a vendor');
         isSaving = false;
         return;
       }
-      
+
       if (formData.items.length === 0) {
         alert('Please add at least one item');
         isSaving = false;
         return;
       }
-      
+
       // Calculate totals one last time
       calculateTotals();
-      
+
       // Prepare data for save
       const receivingReportData = {
         ...formData,
+        status,
         updatedAt: new Date()
       };
-      
+
       // Create or update
       let savedDocId;
       if (isEditMode && formData.id) {
@@ -296,7 +301,7 @@
         if (!receivingReportData.rrNo || !receivingReportData.rrNo.startsWith('RR')) {
           receivingReportData.rrNo = await generateNextDocumentId(DocumentType.RECEIVING_REPORT);
         }
-        
+
         // Add new document with generated ID
         const docRef = await addDocToCollection(
           'transactions/vendorCenter/receivingReports',
@@ -304,22 +309,17 @@
         );
         savedDocId = docRef.id;
       }
-      
+
       // Create journal entry if the document is being posted
-      if (formData.status === 'Posted') {
+      if (status === 'Posted') {
         await createReceivingReportJournalEntry({
           id: savedDocId,
           ...receivingReportData
         });
-        
-        // Update the document status to reflect it's been posted
-        await updateDocInCollection(
-          'transactions/vendorCenter/receivingReports',
-          savedDocId,
-          { status: 'Posted' }
-        );
       }
-      
+
+      alert(status === 'Draft' ? 'Receiving report saved as draft' : 'Receiving report saved successfully');
+
       // Navigate back to list
       goto('/vendorCenter/receivingReport/list');
     } catch (error) {
@@ -383,11 +383,11 @@
     />
     
     <!-- Form Footer with transaction summary and buttons -->
-    <FormFooter 
+    <FormFooter
       primaryLabel={isViewMode ? 'Back to List' : (isSaving ? 'Saving...' : (isEditMode ? 'Update Receiving Report' : 'Create Receiving Report'))}
-      secondaryLabel="Cancel"
-      onPrimaryClick={isViewMode ? () => goto('/vendorCenter/receivingReport/list') : saveReceivingReport}
-      onSecondaryClick={() => goto('/vendorCenter/receivingReport/list')}
+      secondaryLabel="Save as Draft"
+      onPrimaryClick={isViewMode ? () => goto('/vendorCenter/receivingReport/list') : () => saveReceivingReport('Posted')}
+      onSecondaryClick={() => saveReceivingReport('Draft')}
       showSecondaryButton={!isViewMode}
       readOnly={isViewMode}
       leftSideContent={true}

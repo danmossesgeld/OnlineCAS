@@ -443,6 +443,10 @@
   $: vatableAmount = lineItems.reduce((sum, i) => sum + (getTaxCategory(i.taxType) === 'vatable' ? (i.amount || 0) : 0), 0);
   $: zeroRated = lineItems.reduce((sum, i) => sum + (getTaxCategory(i.taxType) === 'zero' ? (i.amount || 0) : 0), 0);
   $: vatExempt = lineItems.reduce((sum, i) => sum + (getTaxCategory(i.taxType) === 'exempt' ? (i.amount || 0) : 0), 0);
+  // Pre-discount gross of vatable lines only — needed (alongside vatableAmount above) so the
+  // journal entry can split "Sales Revenue" and "Sales Discount" by tax category instead of
+  // assuming the whole invoice is vatable. See accountingService.ts's createSalesInvoiceJournalEntry.
+  $: vatableGross = lineItems.reduce((sum, i) => sum + (getTaxCategory(i.taxType) === 'vatable' ? ((i.price || 0) * (i.qty || 0)) : 0), 0);
   
   // VAT-exclusive sales (amount before VAT)
   $: vatableSales = vatableAmount / 1.12;
@@ -522,6 +526,7 @@
         
         // Totals with proper number conversion
         grossAmount: prepareNumber(grossAmount),
+        vatableGross: prepareNumber(vatableGross),
         discount: prepareNumber(discount),
         netSales: prepareNumber(netSales),
         vat: prepareNumber(vat),

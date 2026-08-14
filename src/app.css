@@ -22,10 +22,11 @@
 
   /* Neutral Colors */
   /* neutral-0 is a soft "modern white" (not pure #fff) — flat surfaces (cards, sidebar,
-     headers) sit on this everywhere, and pure white at that scale reads as glare. */
-  --color-neutral-0: #fafbfc;
-  --color-neutral-50: #f4f6f8;
-  --color-neutral-100: #eef1f5;
+     headers) sit on this everywhere, and pure white at that scale reads as glare. First pass
+     (#fafbfc) was too close to #fff to actually register as softened — pushed further here. */
+  --color-neutral-0: #f3f4f6;
+  --color-neutral-50: #eaecef;
+  --color-neutral-100: #e3e6eb;
   --color-neutral-200: #e2e8f0;
   --color-neutral-300: #cbd5e1;
   --color-neutral-400: #94a3b8;

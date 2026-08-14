@@ -86,13 +86,20 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
   await assertPeriodOpen(invoice.invoiceDate);
   try {
     // Calculate amounts based on the correct accounting computation
-    const grossAmount = invoice.grossAmount || 0;
-    const discount = invoice.discount || 0;
-    const netSales = invoice.netSales || 0;
     const vat = invoice.vat || 0;
     const vatableSales = invoice.vatableSales || 0;
+    const zeroRated = invoice.zeroRated || 0;
+    const vatExempt = invoice.vatExempt || 0;
     const lessWithholding = invoice.lessWithholding || 0;
     const totalDue = invoice.totalDue || 0;
+    // Revenue/discount are split by tax category (vatable vs. zero-rated/exempt) rather than
+    // treating the whole invoice as vatable — a mixed-category invoice (or any line left at the
+    // default blank tax type, which counts as exempt) would otherwise credit "Sales Revenue" at
+    // grossAmount/1.12 while Output VAT only covers the vatable portion, posting an unbalanced
+    // entry. zeroRated/vatExempt amounts are already net-of-discount and VAT-exclusive (no VAT to
+    // strip), so only the vatable portion needs the gross/discount/VAT breakout.
+    const vatableGross = invoice.vatableGross || 0;
+    const vatableDiscount = Math.max(0, vatableGross - vatableSales * 1.12);
     
     // Determine the main account based on cash sale or credit sale
     const mainAccountId = invoice.cashSale ? 'undeposited-cash' : 'accounts-receivable';
@@ -131,11 +138,11 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
       credit: 0
     });
     
-    // 2. Debit Sales Discount (if any)
-    if (discount > 0) {
-      // Calculate VAT-exclusive discount amount
-      const discountVatExclusive = discount / 1.12;
-      
+    // 2. Debit Sales Discount (vatable lines only — zero-rated/exempt lines' discounts are
+    // already netted into their revenue amounts below, since they have no VAT to strip out)
+    if (vatableDiscount > 0) {
+      const discountVatExclusive = vatableDiscount / 1.12;
+
       lines.push({
         lineNo: lineCounter++,
         accountId: 'sales-discount',
@@ -176,9 +183,10 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
       });
     }
     
-    // 5. Credit Sales Revenue (VAT-exclusive amount of gross sales)
-    const salesRevenue = grossAmount / 1.12;
-    if (salesRevenue > 0) {
+    // 5. Credit Sales Revenue — split by tax category so the entry balances regardless of the
+    // mix of vatable/zero-rated/exempt lines on the invoice.
+    const vatableRevenue = vatableGross / 1.12;
+    if (vatableRevenue > 0) {
       lines.push({
         lineNo: lineCounter++,
         accountId: 'sales-revenue',
@@ -186,21 +194,53 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
         nameType: 'customer',
         nameId: invoice.customer,
         nameName: invoice.customerName,
-        lineDescription: `Sales Revenue - Invoice #${invoice.invoiceNo}`,
+        lineDescription: `Sales Revenue (Vatable) - Invoice #${invoice.invoiceNo}`,
         debit: 0,
-        credit: salesRevenue
+        credit: vatableRevenue
       });
     }
-    
-    // Create the complete journal entry with lines
+    if (zeroRated > 0) {
+      lines.push({
+        lineNo: lineCounter++,
+        accountId: 'sales-revenue',
+        accountName: 'Sales',
+        nameType: 'customer',
+        nameId: invoice.customer,
+        nameName: invoice.customerName,
+        lineDescription: `Zero-Rated Sales - Invoice #${invoice.invoiceNo}`,
+        debit: 0,
+        credit: zeroRated
+      });
+    }
+    if (vatExempt > 0) {
+      lines.push({
+        lineNo: lineCounter++,
+        accountId: 'sales-revenue',
+        accountName: 'Sales',
+        nameType: 'customer',
+        nameId: invoice.customer,
+        nameName: invoice.customerName,
+        lineDescription: `VAT-Exempt Sales - Invoice #${invoice.invoiceNo}`,
+        debit: 0,
+        credit: vatExempt
+      });
+    }
+
+    // Create the complete journal entry with lines. totalDebit/totalCredit reflect the actual
+    // line sums (not just totalDue) so they stay accurate now that discount/withholding lines
+    // can make total debits exceed totalDue.
+    const linesTotalDebit = lines.reduce((sum, l) => sum + (l.debit || 0), 0);
+    const linesTotalCredit = lines.reduce((sum, l) => sum + (l.credit || 0), 0);
     const journalEntry = {
       ...journalEntryData,
+      totalDebit: linesTotalDebit,
+      totalCredit: linesTotalCredit,
       lines
     };
-    
+
     // Check if a journal entry already exists for this invoice
     const existingEntries = await getJournalEntriesForSource('salesInvoice', invoice.id);
-    
+
     if (existingEntries && existingEntries.length > 0) {
       // Delete existing entries to prevent duplicates
       console.log('Deleting existing journal entries for this invoice to prevent duplicates');
