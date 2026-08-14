@@ -201,7 +201,142 @@ function updateViewportHeight() {
           {/if}
         </a>
       </li>
-      
+
+      <!-- Masterlist with animation -->
+      <li style="margin-bottom: var(--space-1);">
+        <button
+          type="button"
+          class="nav-item flex items-center w-full transition-all duration-200 group"
+          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {masterlistOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
+          on:click={() => masterlistOpen = !masterlistOpen}
+          aria-expanded={masterlistOpen}
+        >
+          <iconify-icon
+            icon="material-symbols:grid-view-rounded"
+            width="20"
+            height="20"
+            class="mr-3 transition-colors duration-200"
+            style="color: {masterlistOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-500)'}"
+          ></iconify-icon>
+          <span>Masterlist</span>
+          <iconify-icon
+            icon="material-symbols:chevron-right"
+            width="18"
+            height="18"
+            class="ml-auto transform transition-transform duration-200 {masterlistOpen ? 'rotate-90' : ''}"
+            style="color: {masterlistOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+          ></iconify-icon>
+        </button>
+
+        <!-- Animated dropdown content -->
+        {#if masterlistOpen}
+          <div transition:slide={{duration: 200, easing: quintOut}}>
+            <ul class="nav-dropdown" style="padding-left: var(--space-4); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
+              <li>
+                <a
+                  href="/masterlist/accounts"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/accounts') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/masterlist/accounts')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:menu-book-outline-rounded"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/accounts') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Chart of Accounts</span>
+                  {#if isActive('/masterlist/accounts')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/masterlist/items"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/items') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/masterlist/items')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:inventory-2-rounded"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/items') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Items</span>
+                  {#if isActive('/masterlist/items')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/masterlist/customers"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/customers') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/masterlist/customers')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:group-rounded"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/customers') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Customers</span>
+                  {#if isActive('/masterlist/customers')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/masterlist/vendors"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/vendors') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/masterlist/vendors')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:store-rounded"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/vendors') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Vendors</span>
+                  {#if isActive('/masterlist/vendors')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/masterlist/others"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/others') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/masterlist/others')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:image-rounded"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/masterlist/others') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Other Name</span>
+                  {#if isActive('/masterlist/others')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+            </ul>
+          </div>
+        {/if}
+      </li>
+
       <!-- Customer Center with modern dropdown styling -->
       <li class="nav-item" style="margin-bottom: var(--space-1);">
         <button
@@ -772,141 +907,6 @@ function updateViewportHeight() {
                   ></iconify-icon>
                   <span style="font-weight: var(--font-medium);">Data Auditor</span>
                   {#if isActive('/accounting/auditor')}
-                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
-                  {/if}
-                </a>
-              </li>
-            </ul>
-          </div>
-        {/if}
-      </li>
-      
-      <!-- Masterlist with animation -->
-      <li style="margin-bottom: var(--space-1);">
-        <button
-          type="button"
-          class="nav-item flex items-center w-full transition-all duration-200 group"
-          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {masterlistOpen ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
-          on:click={() => masterlistOpen = !masterlistOpen}
-          aria-expanded={masterlistOpen}
-        >
-          <iconify-icon 
-            icon="material-symbols:grid-view-rounded" 
-            width="20" 
-            height="20" 
-            class="mr-3 transition-colors duration-200"
-            style="color: {masterlistOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-500)'}"
-          ></iconify-icon>
-          <span>Masterlist</span>
-          <iconify-icon
-            icon="material-symbols:chevron-right"
-            width="18"
-            height="18"
-            class="ml-auto transform transition-transform duration-200 {masterlistOpen ? 'rotate-90' : ''}"
-            style="color: {masterlistOpen ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
-          ></iconify-icon>
-        </button>
-        
-        <!-- Animated dropdown content -->
-        {#if masterlistOpen}
-          <div transition:slide={{duration: 200, easing: quintOut}}>
-            <ul class="nav-dropdown" style="padding-left: var(--space-4); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
-              <li>
-                <a
-                  href="/masterlist/accounts"
-                  class="flex items-center transition-all duration-200 group"
-                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/accounts') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
-                  on:click|preventDefault={() => handleNav('/masterlist/accounts')}
-                >
-                  <iconify-icon 
-                    icon="material-symbols:menu-book-outline-rounded" 
-                    width="16" 
-                    height="16" 
-                    class="mr-2 transition-colors duration-200"
-                    style="color: {isActive('/masterlist/accounts') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
-                  ></iconify-icon>
-                  <span style="font-weight: var(--font-medium);">Chart of Accounts</span>
-                  {#if isActive('/masterlist/accounts')}
-                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
-                  {/if}
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/masterlist/items"
-                  class="flex items-center transition-all duration-200 group"
-                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/items') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
-                  on:click|preventDefault={() => handleNav('/masterlist/items')}
-                >
-                  <iconify-icon 
-                    icon="material-symbols:inventory-2-rounded" 
-                    width="16" 
-                    height="16" 
-                    class="mr-2 transition-colors duration-200"
-                    style="color: {isActive('/masterlist/items') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
-                  ></iconify-icon>
-                  <span style="font-weight: var(--font-medium);">Items</span>
-                  {#if isActive('/masterlist/items')}
-                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
-                  {/if}
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/masterlist/customers"
-                  class="flex items-center transition-all duration-200 group"
-                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/customers') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
-                  on:click|preventDefault={() => handleNav('/masterlist/customers')}
-                >
-                  <iconify-icon 
-                    icon="material-symbols:group-rounded" 
-                    width="16" 
-                    height="16" 
-                    class="mr-2 transition-colors duration-200"
-                    style="color: {isActive('/masterlist/customers') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
-                  ></iconify-icon>
-                  <span style="font-weight: var(--font-medium);">Customers</span>
-                  {#if isActive('/masterlist/customers')}
-                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
-                  {/if}
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/masterlist/vendors"
-                  class="flex items-center transition-all duration-200 group"
-                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/vendors') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
-                  on:click|preventDefault={() => handleNav('/masterlist/vendors')}
-                >
-                  <iconify-icon 
-                    icon="material-symbols:store-rounded" 
-                    width="16" 
-                    height="16" 
-                    class="mr-2 transition-colors duration-200"
-                    style="color: {isActive('/masterlist/vendors') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
-                  ></iconify-icon>
-                  <span style="font-weight: var(--font-medium);">Vendors</span>
-                  {#if isActive('/masterlist/vendors')}
-                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
-                  {/if}
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/masterlist/others"
-                  class="flex items-center transition-all duration-200 group"
-                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/masterlist/others') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
-                  on:click|preventDefault={() => handleNav('/masterlist/others')}
-                >
-                  <iconify-icon 
-                    icon="material-symbols:image-rounded" 
-                    width="16" 
-                    height="16" 
-                    class="mr-2 transition-colors duration-200"
-                    style="color: {isActive('/masterlist/others') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
-                  ></iconify-icon>
-                  <span style="font-weight: var(--font-medium);">Other Name</span>
-                  {#if isActive('/masterlist/others')}
                     <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                   {/if}
                 </a>

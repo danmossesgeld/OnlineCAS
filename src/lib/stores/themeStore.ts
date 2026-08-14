@@ -5,11 +5,15 @@ export type Theme = 'light' | 'dark';
 
 const STORAGE_KEY = 'digisoft-theme';
 
+// Dark is the app default. A user's explicit choice (light or dark) is saved to
+// localStorage and always wins on return visits — this only applies when nothing
+// has been saved yet, so first-time visitors land on dark instead of following OS
+// preference.
 function getInitialTheme(): Theme {
-  if (!browser) return 'light';
+  if (!browser) return 'dark';
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === 'light' || stored === 'dark') return stored;
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return 'dark';
 }
 
 function applyTheme(theme: Theme) {
