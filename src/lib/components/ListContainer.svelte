@@ -393,7 +393,7 @@
         <iconify-icon icon="material-symbols:search" class="absolute left-3 top-1/2 transform -translate-y-1/2" style="color: var(--color-neutral-400);" width="18" height="18"></iconify-icon>
         <input
           class="w-full pl-9 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-colors"
-          style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+          style="background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
           placeholder={searchPlaceholder}
           bind:value={searchTerm}
         />
@@ -402,7 +402,7 @@
       {#if showStatusFilter}
       <select
         class="w-full sm:w-auto py-2 px-3 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-colors cursor-pointer"
-        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        style="background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
         bind:value={statusFilter}
       >
         <option>All Statuses</option>
@@ -416,7 +416,7 @@
       {#if showDateFilter}
       <select
         class="w-full sm:w-auto py-2 px-3 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-colors cursor-pointer"
-        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        style="background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
         bind:value={dateFilter}
       >
         <option>All Time</option>
@@ -429,7 +429,7 @@
       {#each customFilters as filter}
       <select
         class="w-full sm:w-auto py-2 px-3 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-colors cursor-pointer"
-        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+        style="background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
       >
         <option>{filter.label}</option>
         {#each filter.options as option}

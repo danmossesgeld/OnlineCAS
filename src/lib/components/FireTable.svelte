@@ -18,13 +18,28 @@
   export let enableHierarchy: boolean = true;
   export let hierarchyField: string = 'parentId';
   export let nameField: string = 'name';
-  
+  // Client-side search — filters the already-loaded rows rather than rewriting the Firestore
+  // query. A server-side range query (where >=/<= term) is case-sensitive and prefix-only (so
+  // "cash" never matches "Cash" or "Petty Cash"), and for hierarchical data it silently drops
+  // matching child rows whose parent didn't also match. Filtering client-side after the full
+  // collection is loaded avoids both problems and needs no composite Firestore index.
+  export let searchTerm: string = '';
+  export let searchKeys: string[] = [];
+
   // Provided for external reference - not used in this component
   export const actions = () => null;
 
   // Internal state
   let rows: any[] = [];
   let unsub: Unsubscriber | null = null;
+
+  $: filteredRows = (() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term || searchKeys.length === 0) return rows;
+    return rows.filter(row =>
+      searchKeys.some(key => String(row[key] ?? '').toLowerCase().includes(term))
+    );
+  })();
 
   $: {
     // Clean up previous subscription if it exists
@@ -122,7 +137,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each rows as row, idx}
+      {#each filteredRows as row, idx}
         <tr class="transition-colors duration-100 hover:[background:var(--color-primary-50)]">
           {#each columns as col}
             <td class="px-3 py-2.5 align-middle" style="border-bottom: 1px solid var(--color-neutral-100);">

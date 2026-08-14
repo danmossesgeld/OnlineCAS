@@ -1055,7 +1055,7 @@
             type="text"
             placeholder="Search credit # / type ..."
             class="w-full rounded border text-sm focus:outline-none focus:ring-2 transition-colors"
-            style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+            style="background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
             bind:value={creditSearchTerm}
           />
         </div>

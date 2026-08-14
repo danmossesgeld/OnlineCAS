@@ -16,7 +16,7 @@
   import { goto } from '$app/navigation';
   import FireTable from '$lib/components/FireTable.svelte';
   import { deleteDocFromCollection } from '$lib/utils/firestoreCrud';
-  import { getFirestore, collection, query, getDocs, where, orderBy } from 'firebase/firestore';
+  import { getFirestore, collection, query, getDocs } from 'firebase/firestore';
   import { app } from '$lib/utils/firebase';
 
   // Props for collection path
@@ -64,51 +64,22 @@
   let totalCount = 0;
   let isLoading = true;
   let searchTerm = '';
-  let filteredQueryOptions = [...queryOptions];
-  
+
+  // Columns whose values are reasonable to search across (name/code/description/etc.) \u2014
+  // matched client-side in FireTable against the already-loaded rows. See FireTable.svelte
+  // for why this isn't done as a Firestore query.
+  $: searchKeys = columns
+    .filter(col => [
+      'name', 'title', 'code', 'description', 'number', 'reference',
+      'email', 'phone', 'address', 'contact'
+    ].some(searchField => col.key.toLowerCase().includes(searchField)))
+    .map(col => col.key);
+
   // Load data count on mount
   onMount(async () => {
     await loadTotalCount();
   });
-  
-  // Update query options when search term changes
-  $: {
-    if (searchTerm && searchTerm.trim() !== '') {
-      // Find searchable columns (typically name, code, or title fields)
-      const searchableColumns = columns
-        .filter(col => [
-          'name', 'title', 'code', 'description', 'number', 'reference',
-          'email', 'phone', 'address', 'contact'
-        ].some(searchField => col.key.toLowerCase().includes(searchField)))
-        .map(col => col.key);
-        
-      if (searchableColumns.length > 0) {
-        // Create a filtered query that searches across the searchable columns
-        // First remove any existing search constraints
-        const baseOptions = queryOptions.filter(opt => {
-          // This is a simplified way to check if an option is a search constraint
-          // Actual implementation might need to be more sophisticated depending on how your queries are structured
-          return typeof opt !== 'object' || !('fieldPath' in opt);
-        });
-        
-        // Add search constraints for each searchable column
-        // Use case-insensitive search if supported by your Firestore instance
-        filteredQueryOptions = [
-          ...baseOptions,
-          // The first searchable column is usually the most important (like name)
-          // We're using startsWith for better performance but could use contains if needed
-          where(searchableColumns[0], '>=', searchTerm),
-          where(searchableColumns[0], '<=', searchTerm + '\uf8ff'),
-          // Add ordering to make search results more predictable
-          orderBy(searchableColumns[0])
-        ];
-      }
-    } else {
-      // Reset to original query options when search is cleared
-      filteredQueryOptions = [...queryOptions];
-    }
-  }
-  
+
   // Function to load total count
   async function loadTotalCount() {
     isLoading = true;
@@ -189,7 +160,7 @@
         <iconify-icon icon="material-symbols:search" class="absolute left-3 top-1/2 transform -translate-y-1/2" style="color: var(--color-neutral-400);" width="18" height="18"></iconify-icon>
         <input
           class="w-full pl-9 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-colors"
-          style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+          style="background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
           placeholder={searchPlaceholder}
           bind:value={searchTerm}
         />
@@ -199,7 +170,7 @@
         {#each customFilters as filter}
           <select
             class="w-full sm:w-auto py-2 px-3 rounded-lg border text-sm"
-            style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
+            style="background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
           >
             <option value="">{filter.label}</option>
             {#each filter.options as option}
@@ -216,7 +187,9 @@
       {parentCollection}
       {subCollectionName}
       {columns}
-      queryOptions={filteredQueryOptions}
+      {queryOptions}
+      {searchTerm}
+      {searchKeys}
     >
       <!-- Pass through actions from parent -->
       <svelte:fragment slot="actions" let:row>

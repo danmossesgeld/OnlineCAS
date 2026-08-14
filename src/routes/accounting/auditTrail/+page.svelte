@@ -67,7 +67,7 @@
   let selectedEntry: JournalEntry | null = null;
 
   // Shared inline style for filter inputs (theme-aware)
-  const inputStyle = 'background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);';
+  const inputStyle = 'background: var(--color-neutral-50); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);';
 
   onMount(async () => {
     await loadJournalEntries();
