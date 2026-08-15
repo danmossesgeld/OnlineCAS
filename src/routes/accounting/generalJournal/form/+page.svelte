@@ -387,23 +387,26 @@
         updatedAt: new Date()
       };
       
+      let savedId = docId;
       if (isCreateMode) {
         // Add new journal entry
         const newJournalData = {
           ...journalEntryData,
           createdAt: new Date()
         };
-        
-        await addDocToCollection('transactions', 'accounting', 'journalEntries', newJournalData);
+
+        const docRef = await addDocToCollection('transactions', 'accounting', 'journalEntries', newJournalData);
+        savedId = docRef.id;
         alert('Journal entry created successfully');
       } else if (isEditMode) {
         // Update existing journal entry
         await updateDocInCollection('transactions/accounting/journalEntries', docId, journalEntryData);
         alert('Journal entry updated successfully');
       }
-      
-      // Navigate to the list view after successful save
-      goto('/accounting/generalJournal/list');
+
+      // Land on the saved entry's view mode, not the list — consistent with every other
+      // transaction type (BLUEPRINT.md §8.1/§4.4).
+      goto(`/accounting/generalJournal/form?id=${savedId}&viewMode=true`);
       
     } catch (error) {
       console.error('Error saving journal entry:', error);
@@ -485,12 +488,6 @@
     }
   }
 
-  // Define summary items for the footer
-  const summary = {
-    'Total Debit': totalDebit,
-    'Total Credit': totalCredit,
-    'Difference': Math.abs(totalDebit - totalCredit)
-  };
 
   // Handle line updates for different fields
   function handleLineUpdate(idx: number, field: string, value: any) {

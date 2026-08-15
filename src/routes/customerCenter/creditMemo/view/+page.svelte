@@ -5,6 +5,8 @@
   import { page } from '$app/stores';
   import { formatCurrency, formatDate } from '$lib/utils/formatters';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
+  import { getCompanyProfile } from '$lib/utils/companyProfileService';
+  import { generateCreditMemoPdf } from '$lib/utils/documentPdfService';
 
   let loading = true;
   let creditMemoData: any = null;
@@ -114,6 +116,76 @@
   function handleBack() {
     goto('/customerCenter/creditMemo/list');
   }
+
+  let isGeneratingPdf = false;
+
+  /**
+   * Builds a printable PDF/print of this saved credit memo — mirrors Sales Invoice's
+   * handleGeneratePdf (salesInvoice/form/+page.svelte, BLUEPRINT.md §8.1). Credit Memo has no
+   * stored vatable/zero-rated/exempt breakdown (§3.3) — only a flat subtotal/taxAmount/
+   * totalAmount, same fields this page already displays — so the PDF only shows Net Sales/VAT/
+   * Total, matching what's actually available, not a fabricated breakdown.
+   */
+  async function handleGeneratePdf(action: 'download' | 'print') {
+    isGeneratingPdf = true;
+    try {
+      const company = await getCompanyProfile();
+      if (!company) {
+        alert('Company Profile has not been set up yet. Go to Admin Tools > Company Profile first.');
+        return;
+      }
+
+      let customerAddress = '';
+      let customerTin = '';
+      if (creditMemoData.customer) {
+        const customerDoc: any = await getDocFromCollection('masterlist/customers', creditMemoData.customer);
+        if (customerDoc) {
+          customerAddress = customerDoc.billing_address || '';
+          customerTin = customerDoc.tax_id || '';
+        }
+      }
+
+      const netSales = computedNetSales;
+      const vat = creditMemoData.taxAmount && creditMemoData.taxAmount > 0 ? creditMemoData.taxAmount : computedVat;
+      const lessWithholding = creditMemoData.withholdingTax
+        ? (creditMemoData.subtotal || 0) * (parseFloat(creditMemoData.withholdingTax) / 100)
+        : 0;
+      const totalDue = creditMemoData.totalAmount && creditMemoData.totalAmount > 0 ? creditMemoData.totalAmount : computedTotal;
+
+      generateCreditMemoPdf(
+        {
+          cmNo: creditMemoData.cmNo || 'DRAFT',
+          cmDate: creditMemoData.cmDate,
+          customerName: creditMemoData.customerName || '',
+          customerAddress,
+          customerTin,
+          reference: creditMemoData.reference,
+          lineItems: (creditMemoData.items || []).map((item: any) => ({
+            itemName: getItemLabel(item),
+            description: item.description || '',
+            unitName: getUnitLabel(item),
+            qty: item.quantity || 0,
+            unitPrice: item.unitPrice || 0,
+            amount: item.amount ?? (item.quantity || 0) * (item.unitPrice || 0)
+          })),
+          netSales,
+          vatableSales: 0,
+          zeroRated: 0,
+          vatExempt: 0,
+          vat,
+          lessWithholding,
+          totalDue
+        },
+        company,
+        action
+      );
+    } catch (error) {
+      console.error('Error generating credit memo PDF:', error);
+      alert('Failed to generate PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      isGeneratingPdf = false;
+    }
+  }
 </script>
 
 <div class="flex flex-col h-full w-full">
@@ -128,6 +200,28 @@
     </button>
     <h1 class="text-xl md:text-2xl font-semibold" style="color: var(--color-neutral-800);">Credit Memo View</h1>
     <div class="ml-auto flex items-center gap-3">
+      {#if creditMemoData}
+        <button
+          type="button"
+          class="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border shrink-0 disabled:opacity-60"
+          style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
+          disabled={isGeneratingPdf}
+          on:click={() => handleGeneratePdf('print')}
+        >
+          <iconify-icon icon="material-symbols:print-outline" width="18" height="18"></iconify-icon>
+          <span>Print</span>
+        </button>
+        <button
+          type="button"
+          class="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border shrink-0 disabled:opacity-60"
+          style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
+          disabled={isGeneratingPdf}
+          on:click={() => handleGeneratePdf('download')}
+        >
+          <iconify-icon icon="material-symbols:download" width="18" height="18"></iconify-icon>
+          <span>{isGeneratingPdf ? 'Generating...' : 'Download PDF'}</span>
+        </button>
+      {/if}
       {#if creditMemoData && creditMemoData.status !== 'Posted'}
         <button
           class="px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-white transition-colors"

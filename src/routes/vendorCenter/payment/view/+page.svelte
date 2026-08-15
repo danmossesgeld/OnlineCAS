@@ -168,7 +168,19 @@
               <tbody>
                 {#each paymentData.billPayments as payment}
                   <tr>
-                    <td class="px-3 py-2.5" style="color: var(--color-neutral-700); border-bottom: 1px solid var(--color-neutral-100);">{payment.billNo}</td>
+                    <td class="px-3 py-2.5" style="border-bottom: 1px solid var(--color-neutral-100);">
+                      {#if payment.billId}
+                        <a
+                          href={`/vendorCenter/apv/form?id=${payment.billId}&viewMode=true`}
+                          class="hover:underline"
+                          style="color: var(--color-primary-600);"
+                        >
+                          {payment.billNo}
+                        </a>
+                      {:else}
+                        <span style="color: var(--color-neutral-700);">{payment.billNo}</span>
+                      {/if}
+                    </td>
                     <td class="px-3 py-2.5 text-right" style="color: var(--color-neutral-600); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(payment.originalAmount)}</td>
                     <td class="px-3 py-2.5 text-right font-medium" style="color: var(--color-success-600); border-bottom: 1px solid var(--color-neutral-100);">{formatCurrency(payment.amountPaid)}</td>
                   </tr>

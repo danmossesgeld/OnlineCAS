@@ -7,11 +7,11 @@
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
-  import { createSalesInvoiceJournalEntry } from '$lib/utils/accountingService';
+  import { createSalesInvoiceJournalEntry, voidJournalEntriesForSource } from '$lib/utils/accountingService';
   import { resolveItemAutofill } from '$lib/utils/itemAutofill';
   import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
   import { getCompanyProfile } from '$lib/utils/companyProfileService';
-  import { generateSalesInvoicePdf } from '$lib/utils/invoicePdfService';
+  import { generateSalesInvoicePdf } from '$lib/utils/documentPdfService';
   import { goto } from '$app/navigation';
   
   // Use the reusable form mode store for handling URL parameters and mode detection
@@ -536,61 +536,76 @@
         updatedAt: new Date()
       };
 
-      // Handle mode-specific operations
+      // Handle mode-specific operations. Cash Sale forces 'Paid' regardless of which button was
+      // clicked (see below) — the posting decision has to key off this actual saved status, not
+      // the raw button choice, or a cash-sale invoice saved via "Save as Draft" would wrongly
+      // skip posting even though it's actually being saved Paid.
+      let savedId = docId;
+      const actualStatus = formData.cashSale ? 'Paid' : status;
       if (isCreateMode) {
         // For drafts, use 'DRAFT' as the invoice number, otherwise generate a sequential number
-        const invoiceNo = status === 'Draft' 
-          ? 'DRAFT' 
+        const invoiceNo = actualStatus === 'Draft'
+          ? 'DRAFT'
           : await generateNextDocumentId(DocumentType.SALES_INVOICE);
-        
+
         const newInvoiceData = {
           ...baseInvoiceData,
           invoiceNo,
           createdAt: new Date(),
-          // Mark cash sales as paid automatically
-          status: formData.cashSale ? 'Paid' : status
+          status: actualStatus
         };
-        
+
         // Add the invoice to Firestore and get the document reference
         const docRef = await addDocToCollection('transactions/customerCenter/salesInvoices', newInvoiceData);
-        
-        // Create journal entry for the new invoice
-        const invoiceWithId = { ...newInvoiceData, id: docRef.id };
-        const journalEntryId = await createSalesInvoiceJournalEntry(invoiceWithId);
-        
-        alert('Invoice created successfully');
+        savedId = docRef.id;
+
+        // Only post a journal entry once the invoice actually leaves Draft — a brand-new Draft
+        // has nothing to void, so there's no existing-entry case to worry about here (§5.6).
+        if (actualStatus !== 'Draft') {
+          const invoiceWithId = { ...newInvoiceData, id: docRef.id };
+          await createSalesInvoiceJournalEntry(invoiceWithId);
+        }
+
+        alert(actualStatus === 'Draft' ? 'Invoice saved as draft' : 'Invoice created successfully');
       } else if (isEditMode) {
         // For edit mode, handle invoice number based on status
         let invoiceNo = formData.originalInvoiceNo;
-        
+
         // If it was a draft and we're saving as non-draft, generate a new invoice number
-        if (formData.status === 'Draft' && status !== 'Draft' && invoiceNo === 'DRAFT') {
+        if (formData.status === 'Draft' && actualStatus !== 'Draft' && invoiceNo === 'DRAFT') {
           invoiceNo = await generateNextDocumentId(DocumentType.SALES_INVOICE);
         }
         // If it's a new draft (no invoice number yet), use 'DRAFT'
-        else if (status === 'Draft' && !invoiceNo) {
+        else if (actualStatus === 'Draft' && !invoiceNo) {
           invoiceNo = 'DRAFT';
         }
-        
+
         const updateInvoiceData = {
           ...baseInvoiceData,
           invoiceNo: invoiceNo || await generateNextDocumentId(DocumentType.SALES_INVOICE),
-          // Mark cash sales as paid automatically, otherwise use the passed status
-          status: formData.cashSale ? 'Paid' : status
+          status: actualStatus
         };
-        
+
         // Update the invoice in Firestore
         await updateDocInCollection('transactions/customerCenter/salesInvoices', docId, updateInvoiceData);
-        
-        // Create or update journal entry for the updated invoice
+
+        // Only post/regenerate a journal entry once the invoice is actually posted. If it's
+        // being saved back down to Draft, void any journal entry a prior save already posted —
+        // otherwise reverting to Draft would silently leave a stale "posted" entry in the ledger.
         const invoiceWithId = { ...updateInvoiceData, id: docId };
-        const journalEntryId = await createSalesInvoiceJournalEntry(invoiceWithId);
-        
-        alert('Invoice updated successfully');
+        if (actualStatus !== 'Draft') {
+          await createSalesInvoiceJournalEntry(invoiceWithId);
+        } else {
+          await voidJournalEntriesForSource('salesInvoice', docId);
+        }
+
+        alert(actualStatus === 'Draft' ? 'Invoice updated and saved as draft' : 'Invoice updated successfully');
       }
-      
-      // Navigate to the list view after successful save
-      goto('/customerCenter/salesInvoice/list');
+
+      // Land on the saved invoice's view mode, not the list — the Print/Download PDF buttons
+      // only render once there's a saved docId, so bouncing straight to the list would mean the
+      // user can never reach them right after saving.
+      goto(`/customerCenter/salesInvoice/form?id=${savedId}&viewMode=true`);
 
     } catch (error) {
       console.error('Error saving sales invoice:', error);
@@ -602,14 +617,16 @@
   let isGeneratingPdf = false;
 
   /**
-   * Builds a printable PDF of the currently-viewed (saved) invoice — the "Output" gap in
-   * BLUEPRINT.md §8.1. Only reachable in view mode (button below), so formData/lineItems here
-   * always reflect an already-saved document. Prefers each line item's own saved itemName/
-   * unitName (present on docLineItems as loaded — see loadDocument) over a live option-store
-   * lookup, since those are the names as they were at save time, not whatever the item/unit is
-   * called now.
+   * Builds a printable PDF of the currently-viewed/edited (saved) invoice — the "Output" gap in
+   * BLUEPRINT.md §8.1. Only reachable once the invoice has a docId (view or edit mode — never
+   * create mode, there's nothing saved yet), so formData/lineItems here always reflect an
+   * already-saved document. Prefers each line item's own saved itemName/unitName (present on
+   * docLineItems as loaded — see loadDocument) over a live option-store lookup, since those are
+   * the names as they were at save time, not whatever the item/unit is called now. `action`
+   * either downloads a real .pdf file or opens the browser print dialog against the same
+   * generated document.
    */
-  async function handleDownloadPdf() {
+  async function handleGeneratePdf(action: 'download' | 'print') {
     isGeneratingPdf = true;
     try {
       const company = await getCompanyProfile();
@@ -662,7 +679,8 @@
           lessWithholding,
           totalDue
         },
-        company
+        company,
+        action
       );
     } catch (error) {
       console.error('Error generating invoice PDF:', error);
@@ -711,13 +729,23 @@
 
 <FormLayout title={pageTitle} backPath="/customerCenter/salesInvoice/list">
   <svelte:fragment slot="header-actions">
-    {#if isViewMode}
+    {#if !isCreateMode}
       <button
         type="button"
         class="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border shrink-0 disabled:opacity-60"
         style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
         disabled={isGeneratingPdf}
-        on:click={handleDownloadPdf}
+        on:click={() => handleGeneratePdf('print')}
+      >
+        <iconify-icon icon="material-symbols:print-outline" width="18" height="18"></iconify-icon>
+        <span>Print</span>
+      </button>
+      <button
+        type="button"
+        class="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border shrink-0 disabled:opacity-60"
+        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
+        disabled={isGeneratingPdf}
+        on:click={() => handleGeneratePdf('download')}
       >
         <iconify-icon icon="material-symbols:download" width="18" height="18"></iconify-icon>
         <span>{isGeneratingPdf ? 'Generating...' : 'Download PDF'}</span>

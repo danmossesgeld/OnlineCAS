@@ -429,8 +429,10 @@
         });
       }
       
-      // Navigate back to list
-      goto('/vendorCenter/payment/list');
+      // Land on the saved payment's view page, not the list — consistent with Sales
+      // Invoice/Credit Memo/APV/Inventory Adjustment/Receive Payment (BLUEPRINT.md §8.1/§4.2).
+      const savedId = isCreateMode ? docRef?.id : docId;
+      goto(`/vendorCenter/payment/view?id=${savedId}`);
       
     } catch (error) {
       console.error('Error saving vendor payment:', error);

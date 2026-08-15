@@ -840,6 +840,24 @@ export async function getJournalEntriesForSource(sourceType: string, sourceId: s
 }
 
 /**
+ * Deletes every journal entry posted for a given source transaction — used when a
+ * transaction that had already been posted (Sales Invoice, APV, Inventory Adjustment) is
+ * edited back down to a non-posting status like 'Draft'. Without this, reverting a
+ * transaction to Draft would leave its old journal entry live in the ledger, since none of
+ * those three generators ever check the source document's own status before running (see
+ * BLUEPRINT.md §5.6) — the form is what decides whether to call the generator at all, and
+ * this is the counterpart call for when it decides not to. Routed through
+ * `deleteDocFromCollection` (not a raw `deleteDoc`) so the deletion is captured in the audit
+ * trail like every other delete.
+ */
+export async function voidJournalEntriesForSource(sourceType: string, sourceId: string): Promise<void> {
+  const existing = await getJournalEntriesForSource(sourceType, sourceId);
+  for (const entry of existing) {
+    await deleteDocFromCollection('transactions/accounting/journalEntries', entry.id);
+  }
+}
+
+/**
  * Creates a journal entry for a credit memo
  * @param creditMemo - The credit memo data
  * @returns The created journal entry ID

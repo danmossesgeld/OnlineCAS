@@ -742,9 +742,11 @@
         });
       }
       
-      // Navigate back to list
-      goto('/customerCenter/receivePayment/list');
-      
+      // Land on the saved receipt's view page, not the list — consistent with Sales
+      // Invoice/Credit Memo/APV/Inventory Adjustment (BLUEPRINT.md §8.1/§4.1).
+      const savedId = isCreateMode ? docRef?.id : docId;
+      goto(`/customerCenter/receivePayment/view?id=${savedId}`);
+
     } catch (error) {
       console.error('Error saving payment receipt:', error);
       alert('Failed to save payment receipt: ' + (error instanceof Error ? error.message : 'Please try again.'));
@@ -760,14 +762,6 @@
     { label: 'Reference', name: 'reference', type: 'text', placeholder: 'Check No., Transaction ID, etc.' }
   ];
   
-  // Form fields array for invoices
-  $: invoiceFields = [
-    { label: 'Customer', name: 'customer', type: 'select', options: customerOptions, required: true },
-    { label: 'Receipt Date', name: 'receiptDate', type: 'date', required: true },
-    { label: 'Payment Method', name: 'paymentMethod', type: 'select', options: paymentMethodOptions, required: true },
-    { label: 'Reference', name: 'reference', type: 'text', placeholder: 'Check No., Transaction ID, etc.' },
-    { label: 'Memo', name: 'memo', type: 'textarea', rows: 2 },
-  ];
 </script>
 
 <FormLayout title={pageTitle} backPath="/customerCenter/receivePayment/list">

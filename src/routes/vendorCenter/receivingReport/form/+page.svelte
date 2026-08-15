@@ -352,8 +352,9 @@
 
       alert(status === 'Draft' ? 'Receiving report saved as draft' : 'Receiving report saved successfully');
 
-      // Navigate back to list
-      goto('/vendorCenter/receivingReport/list');
+      // Land on the saved report's view mode, not the list — consistent with every other
+      // transaction type (BLUEPRINT.md §8.1/§4.2).
+      goto(`/vendorCenter/receivingReport/form?id=${savedDocId}&viewMode=true`);
     } catch (error) {
       console.error('Error saving receiving report:', error);
       alert('Failed to save receiving report: ' + (error as Error).message);

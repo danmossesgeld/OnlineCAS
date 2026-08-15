@@ -7,7 +7,7 @@
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { resolveItemAutofill } from '$lib/utils/itemAutofill';
   import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
-  import { createInventoryAdjustmentJournalEntry } from '$lib/utils/accountingService';
+  import { createInventoryAdjustmentJournalEntry, voidJournalEntriesForSource } from '$lib/utils/accountingService';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   
@@ -261,9 +261,14 @@
   $: totalValue = lineItems.reduce((sum, i) => sum + (i.amount || 0), 0);
 
   /**
-   * Save the inventory adjustment data to Firestore
+   * Save the inventory adjustment data to Firestore. Now takes a real status like every other
+   * generator-backed form (Draft doesn't post, Posted does) — previously this always saved
+   * 'Draft' unconditionally and posted a journal entry unconditionally on every save regardless,
+   * meaning Draft never actually meant "not posted" for this transaction type (BLUEPRINT.md
+   * §5.6). The "Save as Draft" button used to be wired to a no-op; it now calls this with
+   * 'Draft'.
    */
-  async function handleSave() {
+  async function handleSave(status: 'Draft' | 'Posted' = 'Posted') {
     try {
       // Handle view mode - just navigate back to list
       if (isViewMode) {
@@ -348,44 +353,53 @@
       };
       
       // Handle mode-specific operations
+      let savedId = docId;
       if (isCreateMode) {
         const newAdjustmentData = {
           ...baseAdjustmentData,
           adjustmentNo: generateAdjustmentNumber(),
           createdAt: new Date(),
-          status: 'Draft'
+          status
         };
-        
+
         // Add the adjustment to Firestore and get the document reference
         const docRef = await addDocToCollection('inventory', 'transactions', 'adjustments', newAdjustmentData);
-        
-        // Create journal entry for the new adjustment
-        const adjustmentWithId = { ...newAdjustmentData, id: docRef.id };
-        const journalEntryId = await createInventoryAdjustmentJournalEntry(adjustmentWithId);
-        
-        // Log the result for debugging
-        console.log(`Created journal entry with ID: ${journalEntryId}`);
-        alert('Inventory adjustment created successfully');
+        savedId = docRef.id;
+
+        // Only post a journal entry once the adjustment actually leaves Draft — a brand-new
+        // Draft has nothing to void, so there's no existing-entry case to worry about here.
+        if (status !== 'Draft') {
+          const adjustmentWithId = { ...newAdjustmentData, id: docRef.id };
+          await createInventoryAdjustmentJournalEntry(adjustmentWithId);
+        }
+
+        alert(status === 'Draft' ? 'Inventory adjustment saved as draft' : 'Inventory adjustment created successfully');
       } else if (isEditMode) {
         const updateAdjustmentData = {
           ...baseAdjustmentData,
-          adjustmentNo: formData.originalAdjustmentNo || generateAdjustmentNumber()
+          adjustmentNo: formData.originalAdjustmentNo || generateAdjustmentNumber(),
+          status
         };
-        
+
         // Update the adjustment in Firestore
         await updateDocInCollection('inventory/transactions/adjustments', docId, updateAdjustmentData);
-        
-        // Create or update journal entry for the updated adjustment
+
+        // Only post/regenerate a journal entry once the adjustment is actually posted. If it's
+        // being saved back down to Draft, void any journal entry a prior save already posted —
+        // otherwise reverting to Draft would silently leave a stale "posted" entry in the ledger.
         const adjustmentWithId = { ...updateAdjustmentData, id: docId };
-        const journalEntryId = await createInventoryAdjustmentJournalEntry(adjustmentWithId);
-        
-        // Log the result for debugging
-        console.log(`Updated journal entry with ID: ${journalEntryId}`);
-        alert('Inventory adjustment updated successfully');
+        if (status !== 'Draft') {
+          await createInventoryAdjustmentJournalEntry(adjustmentWithId);
+        } else {
+          await voidJournalEntriesForSource('inventory_adjustment', docId);
+        }
+
+        alert(status === 'Draft' ? 'Inventory adjustment updated and saved as draft' : 'Inventory adjustment updated successfully');
       }
-      
-      // Navigate to the list view after successful save
-      goto('/inventory/adjustment/list');
+
+      // Land on the saved adjustment's view mode, not the list — consistent with Sales
+      // Invoice/Credit Memo/APV (BLUEPRINT.md §8.1/§4.3).
+      goto(`/inventory/adjustment/form?id=${savedId}&viewMode=true`);
 
     } catch (error) {
       console.error('Error saving inventory adjustment:', error);
@@ -410,10 +424,6 @@
     { label: 'Total Value', key: 'amount', width: '10%' }
   ];
 
-  const summary = {
-    'Total Items': itemCount,
-    'Total Value': totalValue
-  };
 </script>
 
 <FormLayout title={pageTitle} backPath="/inventory/adjustment/list">
@@ -457,8 +467,8 @@
   <FormFooter
     primaryLabel={isCreateMode ? "Create Adjustment" : "Update Adjustment"}
     secondaryLabel="Save as Draft"
-    onPrimaryClick={handleSave}
-    onSecondaryClick={() => { /* handle save as draft */ }}
+    onPrimaryClick={() => handleSave('Posted')}
+    onSecondaryClick={() => handleSave('Draft')}
     showSecondaryButton={!isViewMode}
     hideButtons={isViewMode}
     summaryMode="custom"

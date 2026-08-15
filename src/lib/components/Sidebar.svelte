@@ -542,28 +542,6 @@ function updateViewportHeight() {
         {/if}
       </li>
       
-      <!-- Banking (simple item) -->
-      <li class="nav-item" style="margin-bottom: var(--space-1);">
-        <a
-          href="/banking"
-          class="flex items-center transition-all duration-200 group"
-          style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); {isActive('/banking') ? 'background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100)); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
-          on:click|preventDefault={() => handleNav('/banking')}
-        >
-          <iconify-icon 
-            icon="material-symbols:account-balance" 
-            width="20" 
-            height="20" 
-            class="mr-3 transition-colors duration-200"
-            style="color: {isActive('/banking') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
-          ></iconify-icon>
-          <span style="font-weight: var(--font-medium); font-size: var(--text-sm);">Banking</span>
-          {#if isActive('/banking')}
-            <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
-          {/if}
-        </a>
-      </li>
-      
       <!-- Reports section with modern dropdown styling -->
       <li class="nav-item" style="margin-bottom: var(--space-1);">
         <button

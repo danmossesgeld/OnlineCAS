@@ -1,4 +1,4 @@
-import { getFirestore, collection, query, orderBy, limit, getDocs, runTransaction } from 'firebase/firestore';
+import { getFirestore, collection, doc, query, orderBy, limit, getDocs, runTransaction } from 'firebase/firestore';
 import { app } from './firebase';
 
 /**
@@ -98,54 +98,62 @@ function formatWithLeadingZeros(num: number, padding: number): string {
 }
 
 /**
- * Generates the next sequential document ID for a specific document type
- * Uses Firestore transactions to prevent concurrent duplicate IDs
- * 
+ * Reads the highest existing document number directly from the target collection —
+ * only ever used to seed a brand-new counter document (see generateNextDocumentId)
+ * the very first time a given document type is generated, so upgrading an app that
+ * already has real documents doesn't restart numbering at 1. This read is a plain
+ * query, not part of any transaction, so it's the one place a race is still
+ * theoretically possible — bounded to that one-time seed, not every future save.
+ */
+async function getCurrentMaxFromCollection(config: DocIdConfig): Promise<number> {
+  const db = getFirestore(app);
+  const collectionRef = collection(db, config.collection);
+  const q = query(collectionRef, orderBy(config.field, 'desc'), limit(1));
+  const querySnapshot = await getDocs(q);
+  if (querySnapshot.empty) return 0;
+  const lastId = querySnapshot.docs[0].data()[config.field] || '';
+  return extractNumberFromId(lastId, config.prefix);
+}
+
+/**
+ * Generates the next sequential document ID for a specific document type.
+ *
+ * Uses a real per-doc-type counter document at `counters/{docType}` (`lastNumber`
+ * field), incremented via `transaction.get()`/`transaction.set()` inside
+ * `runTransaction` — this is what actually gives Firestore's transaction retry
+ * protection something to act on. The previous implementation ran a `getDocs(query)`
+ * against the live collection *inside* `runTransaction` and never touched
+ * `transaction.get()`/`.set()` at all, so despite the transaction wrapper, two
+ * concurrent calls could both read the same "latest" document and compute the same
+ * next number — the wrapper provided no real protection. This version does.
+ *
  * @param docType Document type to generate ID for
  * @returns Promise with the next sequential ID
  */
 export async function generateNextDocumentId(docType: DocumentType): Promise<string> {
   const db = getFirestore(app);
   const config = documentConfigs[docType];
-  
-  // Get a reference to the counter document
-  const counterRef = collection(db, 'system/counters/documentIds');
-  
-  // Run this in a transaction to prevent race conditions
-  return runTransaction(db, async (transaction) => {
-    try {
-      // First, try to get the latest document from the collection itself
-      const collectionRef = collection(db, config.collection);
-      const q = query(
-        collectionRef,
-        orderBy(config.field, 'desc'),
-        limit(1)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      let nextNum = 1; // Default start
-      
-      // If we found a document, extract the number and increment
-      if (!querySnapshot.empty) {
-        const doc = querySnapshot.docs[0];
-        const lastId = doc.data()[config.field] || '';
-        const lastNum = extractNumberFromId(lastId, config.prefix);
-        nextNum = lastNum + 1;
-      }
-      
-      // Generate the new document ID
-      const paddedNumber = formatWithLeadingZeros(nextNum, config.padding);
-      const newDocId = `${config.prefix}${paddedNumber}`;
-      
-      // For future implementation: update a counter document in system/counters to track last used ID
-      // This would provide an additional layer of concurrency protection
-      
-      return newDocId;
-    } catch (error) {
-      console.error(`Error generating document ID for ${docType}:`, error);
-      throw new Error(`Failed to generate sequential document ID for ${docType}`);
-    }
-  });
+  const counterRef = doc(db, 'counters', docType);
+
+  try {
+    // Only actually read if the counter doc turns out not to exist yet (inside the
+    // transaction, below) — computed eagerly here since transactions can't run
+    // arbitrary queries themselves.
+    const fallbackSeed = await getCurrentMaxFromCollection(config);
+
+    const nextNum = await runTransaction(db, async (transaction) => {
+      const counterSnap = await transaction.get(counterRef);
+      const current = counterSnap.exists() ? (counterSnap.data().lastNumber as number) || 0 : fallbackSeed;
+      const next = current + 1;
+      transaction.set(counterRef, { lastNumber: next, prefix: config.prefix, updatedAt: new Date() }, { merge: true });
+      return next;
+    });
+
+    return `${config.prefix}${formatWithLeadingZeros(nextNum, config.padding)}`;
+  } catch (error) {
+    console.error(`Error generating document ID for ${docType}:`, error);
+    throw new Error(`Failed to generate sequential document ID for ${docType}`);
+  }
 }
 
 /**

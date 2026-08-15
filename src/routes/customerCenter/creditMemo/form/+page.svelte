@@ -466,9 +466,11 @@
           { status: desiredStatus }
         );
       }
-      
-      // Navigate back to list
-      goto('/customerCenter/creditMemo/list');
+
+      // Land on the saved credit memo's view page, not the list — the Print/Download PDF
+      // buttons live there and only render once there's a saved document, so bouncing straight
+      // to the list would mean the user can never reach them right after saving.
+      goto(`/customerCenter/creditMemo/view?id=${savedDocId}`);
     } catch (error) {
       console.error('Error saving credit memo:', error);
       alert('Failed to save credit memo: ' + error);

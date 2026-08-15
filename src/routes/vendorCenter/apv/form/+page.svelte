@@ -7,9 +7,11 @@
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
-  import { createApvJournalEntry } from '$lib/utils/accountingService';
+  import { createApvJournalEntry, voidJournalEntriesForSource } from '$lib/utils/accountingService';
   import { filterAccountsByType } from '$lib/utils/accountFilters';
   import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
+  import { getCompanyProfile } from '$lib/utils/companyProfileService';
+  import { generateApvPdf } from '$lib/utils/documentPdfService';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   
@@ -336,6 +338,73 @@
   $: lessWithholding = formData.withholdingTax ? netAmount * (parseFloat(formData.withholdingTax) / 100) : 0;
   $: totalAmountDue = netAmount + vat - lessWithholding;
 
+  let isGeneratingPdf = false;
+
+  /**
+   * Builds a printable PDF/print of the currently-viewed/edited (saved) APV — mirrors Sales
+   * Invoice's handleGeneratePdf (salesInvoice/form/+page.svelte, BLUEPRINT.md §8.1). Only
+   * reachable once the APV has a docId (view or edit mode). Prefers each line's own saved
+   * accountName/costCenterName over a live option-store lookup.
+   */
+  async function handleGeneratePdf(action: 'download' | 'print') {
+    isGeneratingPdf = true;
+    try {
+      const company = await getCompanyProfile();
+      if (!company) {
+        alert('Company Profile has not been set up yet. Go to Admin Tools > Company Profile first.');
+        return;
+      }
+
+      let vendorAddress = '';
+      let vendorTin = '';
+      if (formData.supplier) {
+        const vendorDoc: any = await getDocFromCollection('masterlist/vendors', formData.supplier);
+        if (vendorDoc) {
+          vendorAddress = vendorDoc.address || '';
+          vendorTin = vendorDoc.tax_id || '';
+        }
+      }
+
+      const getExpenseAccountName = (id: string) => expenseAccountOptions.find((a) => a.value === id)?.label || '';
+      const getCostCenterName = (id: string) => costCenterOptions.find((c) => c.value === id)?.label || '';
+      const vendorName = supplierOptions.find((s) => s.value === formData.supplier)?.label || '';
+
+      generateApvPdf(
+        {
+          apvNo: formData.originalApvNo || 'DRAFT',
+          apvDate: formData.apvDate ? new Date(formData.apvDate) : new Date(),
+          dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+          vendorName,
+          vendorAddress,
+          vendorTin,
+          referenceNo: formData.referenceNo,
+          poNumber: formData.poNumber,
+          lineItems: lineItems.map((li) => ({
+            accountName: (li as any).accountName || getExpenseAccountName(li.account),
+            costCenterName: (li as any).costCenterName || getCostCenterName(li.costCenter),
+            description: li.description,
+            amount: li.price || 0,
+            dsc: li.dsc || 0,
+            total: li.total || 0
+          })),
+          grossAmount,
+          discount,
+          netAmount,
+          vat,
+          lessWithholding,
+          totalAmountDue
+        },
+        company,
+        action
+      );
+    } catch (error) {
+      console.error('Error generating APV PDF:', error);
+      alert('Failed to generate PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      isGeneratingPdf = false;
+    }
+  }
+
   /**
    * Save the APV data to Firestore
    */
@@ -421,6 +490,7 @@
       };
 
       // Handle mode-specific operations
+      let savedId = docId;
       if (isCreateMode) {
         // Only reserve a real sequential number once the APV is actually posted;
         // drafts use a placeholder so abandoned drafts don't burn sequence numbers.
@@ -435,13 +505,15 @@
 
         // Add the APV to Firestore and get the document reference
         const docRef = await addDocToCollection('transactions/vendorCenter/apvs', newApvData);
+        savedId = docRef.id;
 
-        // Create journal entry for the new APV
-        const apvWithId = { ...newApvData, id: docRef.id };
-        const journalEntryId = await createApvJournalEntry(apvWithId);
+        // Only post a journal entry once the APV actually leaves Draft — a brand-new Draft has
+        // nothing to void, so there's no existing-entry case to worry about here (§5.6).
+        if (status !== 'Draft') {
+          const apvWithId = { ...newApvData, id: docRef.id };
+          await createApvJournalEntry(apvWithId);
+        }
 
-        // Log the result for debugging
-        console.log(`Created journal entry with ID: ${journalEntryId}`);
         alert(status === 'Draft' ? 'APV saved as draft' : 'APV created successfully');
       } else if (isEditMode) {
         // Promote a draft's placeholder number to a real sequential number the first time it's posted
@@ -461,17 +533,23 @@
         // Update the APV in Firestore
         await updateDocInCollection('transactions/vendorCenter/apvs', docId, updateApvData);
 
-        // Create or update journal entry for the updated APV
+        // Only post/regenerate a journal entry once the APV is actually posted. If it's being
+        // saved back down to Draft, void any journal entry a prior save already posted —
+        // otherwise reverting to Draft would silently leave a stale "posted" entry in the ledger.
         const apvWithId = { ...updateApvData, id: docId };
-        const journalEntryId = await createApvJournalEntry(apvWithId);
+        if (status !== 'Draft') {
+          await createApvJournalEntry(apvWithId);
+        } else {
+          await voidJournalEntriesForSource('apv', docId);
+        }
 
-        // Log the result for debugging
-        console.log(`Updated journal entry with ID: ${journalEntryId}`);
         alert(status === 'Draft' ? 'APV updated and saved as draft' : 'APV updated successfully');
       }
-      
-      // Navigate to the list view after successful save
-      goto('/vendorCenter/apv/list');
+
+      // Land on the saved APV's view mode, not the list — the Print/Download PDF buttons only
+      // render once there's a saved docId, so bouncing straight to the list would mean the user
+      // can never reach them right after saving.
+      goto(`/vendorCenter/apv/form?id=${savedId}&viewMode=true`);
 
     } catch (error) {
       console.error('Error saving APV:', error);
@@ -504,6 +582,28 @@
 
 <FormLayout title={pageTitle} backPath="/vendorCenter/apv/list">
   <svelte:fragment slot="header-actions">
+    {#if !isCreateMode}
+      <button
+        type="button"
+        class="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border shrink-0 disabled:opacity-60"
+        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
+        disabled={isGeneratingPdf}
+        on:click={() => handleGeneratePdf('print')}
+      >
+        <iconify-icon icon="material-symbols:print-outline" width="18" height="18"></iconify-icon>
+        <span>Print</span>
+      </button>
+      <button
+        type="button"
+        class="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border shrink-0 disabled:opacity-60"
+        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
+        disabled={isGeneratingPdf}
+        on:click={() => handleGeneratePdf('download')}
+      >
+        <iconify-icon icon="material-symbols:download" width="18" height="18"></iconify-icon>
+        <span>{isGeneratingPdf ? 'Generating...' : 'Download PDF'}</span>
+      </button>
+    {/if}
     <div class="w-full sm:w-72 flex items-center gap-2">
       <label for="field-memo" class="text-xs font-medium whitespace-nowrap" style="color: var(--color-neutral-600);">Memo</label>
       <textarea

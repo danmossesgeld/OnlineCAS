@@ -103,6 +103,14 @@ service cloud.firestore {
       allow write: if isActiveUser() && (request.path != /databases/$(database)/documents/listdatabase/companyProfile || isAdmin());
     }
 
+    // Per-document-type sequential-numbering counters (documentIdService.ts) — a flat root
+    // collection, one doc per DocumentType (e.g. counters/INV), each just {lastNumber, prefix,
+    // updatedAt}. Any active user needs to both read and transactionally increment these while
+    // posting a normal transaction.
+    match /counters/{docType} {
+      allow read, write: if isActiveUser();
+    }
+
     // Transactions: any active user can read/create/update as part of normal business use
     // (posting invoices, receipts, APVs, ...) — only delete is admin-only, matching the new
     // Reset Transactions tool and, as a side effect, closing off the single-record delete every
