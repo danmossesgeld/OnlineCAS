@@ -94,7 +94,13 @@ service cloud.firestore {
     // listdatabase doc, only an admin may write it.
     match /listdatabase/{document=**} {
       allow read: if isActiveUser();
-      allow write: if isActiveUser() && (document.size() != 1 || document[0] != 'companyProfile' || isAdmin());
+      // Compares the full request path against a literal rather than indexing into the
+      // {document=**} capture — the size()/index-into-a-wildcard-capture form deploys but the
+      // rules compiler flags it with an unresolvable-type warning (**-capture is type `path`,
+      // and .size()/[i] usage on it isn't fully modeled by the static checker); this form
+      // avoids that ambiguity entirely and is the pattern used for `hasProfile()`/`myProfile()`
+      // above.
+      allow write: if isActiveUser() && (request.path != /databases/$(database)/documents/listdatabase/companyProfile || isAdmin());
     }
 
     // Transactions: any active user can read/create/update as part of normal business use
