@@ -660,6 +660,116 @@ function updateViewportHeight() {
                 </a>
               </li>
               
+              <!-- General Ledger -->
+              <li style="margin-bottom: var(--space-1);">
+                <a
+                  href="/accounting/reports/generalLedger"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/generalLedger') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/accounting/reports/generalLedger')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:menu-book-outline"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/generalLedger') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">General Ledger</span>
+                  {#if isActive('/accounting/reports/generalLedger')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+
+              <!-- Sales Journal -->
+              <li style="margin-bottom: var(--space-1);">
+                <a
+                  href="/accounting/reports/salesJournal"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/salesJournal') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/accounting/reports/salesJournal')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:receipt-long-outline"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/salesJournal') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Sales Journal</span>
+                  {#if isActive('/accounting/reports/salesJournal')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+
+              <!-- Purchase Journal -->
+              <li style="margin-bottom: var(--space-1);">
+                <a
+                  href="/accounting/reports/purchaseJournal"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/purchaseJournal') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/accounting/reports/purchaseJournal')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:shopping-cart-outline"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/purchaseJournal') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Purchase Journal</span>
+                  {#if isActive('/accounting/reports/purchaseJournal')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+
+              <!-- Cash Receipts Journal -->
+              <li style="margin-bottom: var(--space-1);">
+                <a
+                  href="/accounting/reports/cashReceiptsJournal"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/cashReceiptsJournal') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/accounting/reports/cashReceiptsJournal')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:payments-outline"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/cashReceiptsJournal') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Cash Receipts Journal</span>
+                  {#if isActive('/accounting/reports/cashReceiptsJournal')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+
+              <!-- Cash Disbursements Journal -->
+              <li style="margin-bottom: var(--space-1);">
+                <a
+                  href="/accounting/reports/cashDisbursementsJournal"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/accounting/reports/cashDisbursementsJournal') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/accounting/reports/cashDisbursementsJournal')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:local-atm-outline"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/accounting/reports/cashDisbursementsJournal') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Cash Disbursements Journal</span>
+                  {#if isActive('/accounting/reports/cashDisbursementsJournal')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
+
               <!-- A/R Aging -->
               <li style="margin-bottom: var(--space-1);">
                 <a
@@ -1158,6 +1268,46 @@ function updateViewportHeight() {
                     ></iconify-icon>
                     <span style="font-weight: var(--font-medium);">User Management</span>
                     {#if isActive('/admin/users')}
+                      <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                    {/if}
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/admin/companyProfile"
+                    class="flex items-center transition-all duration-200 group"
+                    style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/admin/companyProfile') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                    on:click|preventDefault={() => handleNav('/admin/companyProfile')}
+                  >
+                    <iconify-icon
+                      icon="material-symbols:domain-rounded"
+                      width="16"
+                      height="16"
+                      class="mr-2 transition-colors duration-200"
+                      style="color: {isActive('/admin/companyProfile') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                    ></iconify-icon>
+                    <span style="font-weight: var(--font-medium);">Company Profile</span>
+                    {#if isActive('/admin/companyProfile')}
+                      <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                    {/if}
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/admin/auditLog"
+                    class="flex items-center transition-all duration-200 group"
+                    style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/admin/auditLog') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                    on:click|preventDefault={() => handleNav('/admin/auditLog')}
+                  >
+                    <iconify-icon
+                      icon="material-symbols:history-rounded"
+                      width="16"
+                      height="16"
+                      class="mr-2 transition-colors duration-200"
+                      style="color: {isActive('/admin/auditLog') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                    ></iconify-icon>
+                    <span style="font-weight: var(--font-medium);">Audit Log</span>
+                    {#if isActive('/admin/auditLog')}
                       <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
                     {/if}
                   </a>

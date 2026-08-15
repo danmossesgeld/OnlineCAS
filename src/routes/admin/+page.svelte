@@ -9,6 +9,14 @@
       <iconify-icon icon="material-symbols:manage-accounts-rounded" width="28" height="28"></iconify-icon>
       User Management
     </a>
+    <a href="/admin/companyProfile" class="btn btn-outline flex items-center gap-3 text-lg justify-start">
+      <iconify-icon icon="material-symbols:domain-rounded" width="28" height="28"></iconify-icon>
+      Company Profile
+    </a>
+    <a href="/admin/auditLog" class="btn btn-outline flex items-center gap-3 text-lg justify-start">
+      <iconify-icon icon="material-symbols:history-rounded" width="28" height="28"></iconify-icon>
+      Audit Log
+    </a>
     <a href="/admin/resetTransactions" class="btn btn-outline flex items-center gap-3 text-lg justify-start" style="border-color: var(--color-error-300); color: var(--color-error-700);">
       <iconify-icon icon="material-symbols:warning-rounded" width="28" height="28"></iconify-icon>
       Reset Transactions

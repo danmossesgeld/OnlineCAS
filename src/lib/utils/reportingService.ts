@@ -919,3 +919,341 @@ export async function getAPAgingData(asOfDate: Date): Promise<{
     };
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Statutory books: General Ledger, Sales Journal, Purchase Journal, Cash Receipts/Disbursements
+// Journal — the report formats a BIR CAS Acknowledgment Certificate application asks for sample
+// output of (BLUEPRINT.md §8.4). All built on getJournalEntries(dateRange), already the shared
+// base every other report in this file uses.
+// ---------------------------------------------------------------------------------------------
+
+function toJsDate(date: Date | { seconds: number } | string | undefined): Date {
+  if (!date) return new Date(0);
+  if (date instanceof Date) return date;
+  if (typeof date === 'object' && 'seconds' in date) return new Date(date.seconds * 1000);
+  return new Date(date);
+}
+
+/**
+ * General Ledger — every journal-entry line in the range, grouped by account (standard GL
+ * presentation — an interleaved single date-sorted feed across every account at once isn't how
+ * a real ledger reads, since each account's running balance would jump around next to
+ * unrelated accounts' balances), chronological within each account, each group opening with a
+ * "Beginning Balance" line carried forward from all posted activity *before* the range rather
+ * than resetting to zero at the period start. Normal-balance direction resolved the same way
+ * getAccountBalances does, via getAccountCategory so granular QuickBooks-style account types
+ * don't fall through to the debit default.
+ */
+export interface GeneralLedgerLine {
+  date: Date;
+  referenceNo: string;
+  description: string;
+  accountId: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  isBeginningBalance?: boolean;
+}
+
+function resolveNormalBalanceIsDebit(
+  accountId: string,
+  accountName: string,
+  accountsById: Map<string, Account>,
+  accountsByName: Map<string, Account>
+): boolean {
+  const account = accountsById.get(accountId) || accountsByName.get(accountName);
+  const category = account ? getAccountCategory(account.accountType) : determineAccountTypeFromName(accountName);
+  return category === AccountType.Asset || category === AccountType.Expense || category === AccountType.Cogs;
+}
+
+export async function getGeneralLedgerData(dateRange: DateRange, accountId?: string): Promise<{
+  lines: GeneralLedgerLine[];
+  accounts: Account[];
+}> {
+  try {
+    const dayBeforeStart = new Date(dateRange.startDate);
+    dayBeforeStart.setDate(dayBeforeStart.getDate() - 1);
+
+    const [accounts, journalEntries, priorEntries] = await Promise.all([
+      getAllAccounts(),
+      getJournalEntries(dateRange),
+      getJournalEntries({ startDate: new Date(0), endDate: dayBeforeStart })
+    ]);
+    const accountsById = new Map(accounts.map((a) => [a.id, a]));
+    const accountsByName = new Map(accounts.map((a) => [a.name, a]));
+    const filterAccount = accountId ? accountsById.get(accountId) : undefined;
+
+    type Raw = { date: Date; referenceNo: string; description: string; accountId: string; accountName: string; debit: number; credit: number };
+
+    function matchesFilter(lineAccountId: string, lineAccountName: string): boolean {
+      if (filterAccount) return lineAccountId === filterAccount.id || lineAccountName === filterAccount.name;
+      if (accountId) return lineAccountId === accountId;
+      return true;
+    }
+
+    // Beginning balance per account: every posted entry strictly before the range, summed.
+    const beginningBalance: Record<string, number> = {};
+    priorEntries.forEach((entry) => {
+      (entry.lines || []).forEach((line) => {
+        if (!matchesFilter(line.accountId, line.accountName)) return;
+        const key = line.accountId || line.accountName;
+        const isDebitNormal = resolveNormalBalanceIsDebit(line.accountId, line.accountName, accountsById, accountsByName);
+        const delta = isDebitNormal ? (line.debit || 0) - (line.credit || 0) : (line.credit || 0) - (line.debit || 0);
+        beginningBalance[key] = (beginningBalance[key] || 0) + delta;
+      });
+    });
+
+    const raw: Raw[] = [];
+    journalEntries.forEach((entry) => {
+      (entry.lines || []).forEach((line) => {
+        if (!matchesFilter(line.accountId, line.accountName)) return;
+        raw.push({
+          date: toJsDate(entry.journalDate),
+          referenceNo: entry.referenceNo,
+          description: line.lineDescription || entry.description,
+          accountId: line.accountId,
+          accountName: line.accountName,
+          debit: line.debit || 0,
+          credit: line.credit || 0
+        });
+      });
+    });
+
+    // Group by account (code, falling back to name) so each account's activity reads together;
+    // chronological within each group. A single account filter makes this a no-op (one group).
+    raw.sort((a, b) => {
+      const accA = accountsById.get(a.accountId) || accountsByName.get(a.accountName);
+      const accB = accountsById.get(b.accountId) || accountsByName.get(b.accountName);
+      const groupA = accA?.code || a.accountName;
+      const groupB = accB?.code || b.accountName;
+      if (groupA !== groupB) return groupA.localeCompare(groupB, undefined, { numeric: true });
+      return a.date.getTime() - b.date.getTime();
+    });
+
+    const runningBalance: Record<string, number> = { ...beginningBalance };
+    const seenKeys = new Set<string>();
+    const lines: GeneralLedgerLine[] = [];
+
+    raw.forEach((r) => {
+      const key = r.accountId || r.accountName;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        lines.push({
+          date: dateRange.startDate,
+          referenceNo: '',
+          description: 'Beginning Balance',
+          accountId: r.accountId,
+          accountName: r.accountName,
+          debit: 0,
+          credit: 0,
+          balance: runningBalance[key] || 0,
+          isBeginningBalance: true
+        });
+      }
+      const isDebitNormal = resolveNormalBalanceIsDebit(r.accountId, r.accountName, accountsById, accountsByName);
+      const delta = isDebitNormal ? r.debit - r.credit : r.credit - r.debit;
+      runningBalance[key] = (runningBalance[key] || 0) + delta;
+      lines.push({ ...r, balance: runningBalance[key] });
+    });
+
+    return { lines, accounts };
+  } catch (error) {
+    console.error('Error generating General Ledger data:', error);
+    return { lines: [], accounts: [] };
+  }
+}
+
+export interface SalesJournalRow {
+  date: Date;
+  invoiceNo: string;
+  customerName: string;
+  vatableSales: number;
+  zeroRated: number;
+  vatExempt: number;
+  vat: number;
+  total: number;
+}
+
+/** Sales Journal — one row per posted Sales Invoice in range, pulling the canonical stored
+ * VAT-breakdown fields from the invoice itself (not re-derived from journal-line text — the
+ * journal entry's own referenceNo is an unrelated JE-<timestamp> string, not the invoice
+ * number; BLUEPRINT.md §5.3/§8.4). */
+export async function getSalesJournalData(dateRange: DateRange): Promise<{ rows: SalesJournalRow[]; totals: Omit<SalesJournalRow, 'date' | 'invoiceNo' | 'customerName'> }> {
+  try {
+    const journalEntries = await getJournalEntries(dateRange);
+    const salesEntries = journalEntries.filter((e) => e.sourceType === 'salesInvoice' && e.sourceId);
+
+    const rows = (
+      await Promise.all(
+        salesEntries.map(async (entry) => {
+          const invoice: any = await getDocFromCollection('customerCenter/salesInvoices', entry.sourceId);
+          if (!invoice) return null;
+          const row: SalesJournalRow = {
+            date: toJsDate(invoice.invoiceDate || entry.journalDate),
+            invoiceNo: invoice.invoiceNo || entry.referenceNo,
+            customerName: invoice.customerName || 'Unknown',
+            vatableSales: invoice.vatableSales || 0,
+            zeroRated: invoice.zeroRated || 0,
+            vatExempt: invoice.vatExempt || 0,
+            vat: invoice.vat || 0,
+            total: invoice.totalDue || 0
+          };
+          return row;
+        })
+      )
+    ).filter((r): r is SalesJournalRow => r !== null);
+
+    rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    const totals = rows.reduce(
+      (acc, r) => ({
+        vatableSales: acc.vatableSales + r.vatableSales,
+        zeroRated: acc.zeroRated + r.zeroRated,
+        vatExempt: acc.vatExempt + r.vatExempt,
+        vat: acc.vat + r.vat,
+        total: acc.total + r.total
+      }),
+      { vatableSales: 0, zeroRated: 0, vatExempt: 0, vat: 0, total: 0 }
+    );
+
+    return { rows, totals };
+  } catch (error) {
+    console.error('Error generating Sales Journal data:', error);
+    return { rows: [], totals: { vatableSales: 0, zeroRated: 0, vatExempt: 0, vat: 0, total: 0 } };
+  }
+}
+
+export interface PurchaseJournalRow {
+  date: Date;
+  apvNo: string;
+  vendorName: string;
+  netAmount: number;
+  vat: number;
+  total: number;
+}
+
+/** Purchase Journal — one row per posted APV in range, joined back to
+ * transactions/vendorCenter/apvs for apvNo/supplierName/netAmount/vat/totalAmountDue (APV has no
+ * vatable/zero-rated/exempt split field the way Sales Invoice does — see BLUEPRINT.md §3.4 — so
+ * this only reports the flat net/VAT/total APV already computes). */
+export async function getPurchaseJournalData(dateRange: DateRange): Promise<{ rows: PurchaseJournalRow[]; totals: Omit<PurchaseJournalRow, 'date' | 'apvNo' | 'vendorName'> }> {
+  try {
+    const journalEntries = await getJournalEntries(dateRange);
+    const apvEntries = journalEntries.filter((e) => e.sourceType === 'apv' && e.sourceId);
+
+    const rows = (
+      await Promise.all(
+        apvEntries.map(async (entry) => {
+          const apv: any = await getDocFromCollection('vendorCenter/apvs', entry.sourceId);
+          if (!apv) return null;
+          const row: PurchaseJournalRow = {
+            date: toJsDate(apv.apvDate || entry.journalDate),
+            apvNo: apv.apvNo || entry.referenceNo,
+            vendorName: apv.supplierName || 'Unknown',
+            netAmount: apv.netAmount || 0,
+            vat: apv.vat || 0,
+            total: apv.totalAmountDue || 0
+          };
+          return row;
+        })
+      )
+    ).filter((r): r is PurchaseJournalRow => r !== null);
+
+    rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    const totals = rows.reduce(
+      (acc, r) => ({ netAmount: acc.netAmount + r.netAmount, vat: acc.vat + r.vat, total: acc.total + r.total }),
+      { netAmount: 0, vat: 0, total: 0 }
+    );
+
+    return { rows, totals };
+  } catch (error) {
+    console.error('Error generating Purchase Journal data:', error);
+    return { rows: [], totals: { netAmount: 0, vat: 0, total: 0 } };
+  }
+}
+
+export interface CashJournalRow {
+  date: Date;
+  documentNo: string;
+  name: string; // customer or vendor
+  account: string; // the offsetting (non-cash/bank) account this row's cash amount hit
+  amount: number;
+}
+
+/** Finds the journal-entry line most likely to be the "other side" of a cash movement — i.e.
+ * not the Cash/Bank line itself — by the same name-substring heuristic already used elsewhere
+ * in this file (determineAccountTypeFromName, getARAgingData's "receivable" match). Falls back
+ * to the first non-zero line on the requested side if nothing matches. */
+function findOffsettingAccountName(lines: JournalEntryLine[], side: 'credit' | 'debit'): string {
+  const candidates = lines.filter((l) => (side === 'credit' ? l.credit > 0 : l.debit > 0));
+  const nonCash = candidates.find((l) => !/cash|bank/i.test(l.accountName || ''));
+  return (nonCash || candidates[0])?.accountName || 'Unknown';
+}
+
+/** Cash Receipts Journal — one row per posted customer Receipt in range: date, receipt #,
+ * customer, the offsetting (non-cash) account credited, amount. */
+export async function getCashReceiptsJournalData(dateRange: DateRange): Promise<{ rows: CashJournalRow[]; total: number }> {
+  try {
+    const journalEntries = await getJournalEntries(dateRange);
+    const receiptEntries = journalEntries.filter((e) => e.sourceType === 'receipt' && e.sourceId);
+
+    const rows = (
+      await Promise.all(
+        receiptEntries.map(async (entry) => {
+          const receipt: any = await getDocFromCollection('customerCenter/receipts', entry.sourceId);
+          if (!receipt) return null;
+          const row: CashJournalRow = {
+            date: toJsDate(receipt.receiptDate || entry.journalDate),
+            documentNo: receipt.receiptNo || entry.referenceNo,
+            name: receipt.customerName || 'Unknown',
+            account: findOffsettingAccountName(entry.lines || [], 'credit'),
+            amount: receipt.amount || 0
+          };
+          return row;
+        })
+      )
+    ).filter((r): r is CashJournalRow => r !== null);
+
+    rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+    const total = rows.reduce((sum, r) => sum + r.amount, 0);
+    return { rows, total };
+  } catch (error) {
+    console.error('Error generating Cash Receipts Journal data:', error);
+    return { rows: [], total: 0 };
+  }
+}
+
+/** Cash Disbursements Journal — one row per posted Vendor Payment in range: date, voucher #,
+ * vendor, the offsetting (non-cash) account debited, amount. */
+export async function getCashDisbursementsJournalData(dateRange: DateRange): Promise<{ rows: CashJournalRow[]; total: number }> {
+  try {
+    const journalEntries = await getJournalEntries(dateRange);
+    const paymentEntries = journalEntries.filter((e) => e.sourceType === 'payment' && e.sourceId);
+
+    const rows = (
+      await Promise.all(
+        paymentEntries.map(async (entry) => {
+          const payment: any = await getDocFromCollection('vendorCenter/payments', entry.sourceId);
+          if (!payment) return null;
+          const row: CashJournalRow = {
+            date: toJsDate(payment.paymentDate || entry.journalDate),
+            documentNo: payment.paymentNo || entry.referenceNo,
+            name: payment.vendorName || 'Unknown',
+            account: findOffsettingAccountName(entry.lines || [], 'debit'),
+            amount: payment.amount || 0
+          };
+          return row;
+        })
+      )
+    ).filter((r): r is CashJournalRow => r !== null);
+
+    rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+    const total = rows.reduce((sum, r) => sum + r.amount, 0);
+    return { rows, total };
+  } catch (error) {
+    console.error('Error generating Cash Disbursements Journal data:', error);
+    return { rows: [], total: 0 };
+  }
+}

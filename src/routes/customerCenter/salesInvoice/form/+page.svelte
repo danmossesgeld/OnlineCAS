@@ -10,6 +10,8 @@
   import { createSalesInvoiceJournalEntry } from '$lib/utils/accountingService';
   import { resolveItemAutofill } from '$lib/utils/itemAutofill';
   import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
+  import { getCompanyProfile } from '$lib/utils/companyProfileService';
+  import { generateSalesInvoicePdf } from '$lib/utils/invoicePdfService';
   import { goto } from '$app/navigation';
   
   // Use the reusable form mode store for handling URL parameters and mode detection
@@ -597,6 +599,79 @@
     }
   }
 
+  let isGeneratingPdf = false;
+
+  /**
+   * Builds a printable PDF of the currently-viewed (saved) invoice — the "Output" gap in
+   * BLUEPRINT.md §8.1. Only reachable in view mode (button below), so formData/lineItems here
+   * always reflect an already-saved document. Prefers each line item's own saved itemName/
+   * unitName (present on docLineItems as loaded — see loadDocument) over a live option-store
+   * lookup, since those are the names as they were at save time, not whatever the item/unit is
+   * called now.
+   */
+  async function handleDownloadPdf() {
+    isGeneratingPdf = true;
+    try {
+      const company = await getCompanyProfile();
+      if (!company) {
+        alert('Company Profile has not been set up yet. Go to Admin Tools > Company Profile first.');
+        return;
+      }
+
+      let customerAddress = '';
+      let customerTin = '';
+      if (formData.customer) {
+        const customerDoc: any = await getDocFromCollection('masterlist/customers', formData.customer);
+        if (customerDoc) {
+          customerAddress = customerDoc.billing_address || '';
+          customerTin = customerDoc.tax_id || '';
+        }
+      }
+
+      const getItemName = (id: string) => itemOptions.find(o => o.value === id)?.label || '';
+      const getUnitName = (id: string) => unitOptions.find(o => o.value === id)?.label || '';
+      const customerName = customerOptions.find(c => c.value === formData.customer)?.label || '';
+      const paymentMethodName = paymentMethodOptions.find(p => p.value === formData.paymentMethod)?.label || '';
+
+      generateSalesInvoicePdf(
+        {
+          invoiceNo: formData.originalInvoiceNo || 'DRAFT',
+          invoiceDate: formData.invoiceDate ? new Date(formData.invoiceDate) : new Date(),
+          dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+          customerName,
+          customerAddress,
+          customerTin,
+          poNumber: formData.poNumber,
+          termsName: currentTermName,
+          paymentMethodName,
+          lineItems: lineItems.map((li) => ({
+            itemName: (li as any).itemName || getItemName(li.item),
+            description: li.description,
+            unitName: (li as any).unitName || getUnitName(li.unit),
+            qty: li.qty || 0,
+            price: li.price || 0,
+            amount: li.amount || 0
+          })),
+          grossAmount,
+          discount,
+          netSales,
+          vatableSales,
+          zeroRated,
+          vatExempt,
+          vat,
+          lessWithholding,
+          totalDue
+        },
+        company
+      );
+    } catch (error) {
+      console.error('Error generating invoice PDF:', error);
+      alert('Failed to generate PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      isGeneratingPdf = false;
+    }
+  }
+
   // Reset payment method whenever a sale stops being a cash sale, mirroring the old
   // checkbox's on:change handler (now that Cash Sale is a plain select field).
   $: if (!formData.cashSale && formData.paymentMethod) {
@@ -636,6 +711,18 @@
 
 <FormLayout title={pageTitle} backPath="/customerCenter/salesInvoice/list">
   <svelte:fragment slot="header-actions">
+    {#if isViewMode}
+      <button
+        type="button"
+        class="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border shrink-0 disabled:opacity-60"
+        style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700);"
+        disabled={isGeneratingPdf}
+        on:click={handleDownloadPdf}
+      >
+        <iconify-icon icon="material-symbols:download" width="18" height="18"></iconify-icon>
+        <span>{isGeneratingPdf ? 'Generating...' : 'Download PDF'}</span>
+      </button>
+    {/if}
     <div class="w-full sm:w-72 flex items-center gap-2">
       <label for="field-memo" class="text-xs font-medium whitespace-nowrap" style="color: var(--color-neutral-600);">Memo</label>
       <textarea

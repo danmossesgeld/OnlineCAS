@@ -1,4 +1,4 @@
-import { addDocToCollection, updateDocInCollection, getDocFromCollection, queryCollectionDocs, type FilterCondition } from './firestoreCrud';
+import { addDocToCollection, updateDocInCollection, deleteDocFromCollection, getDocFromCollection, queryCollectionDocs, type FilterCondition } from './firestoreCrud';
 
 /**
  * Generates a unique reference number for journal entries
@@ -244,12 +244,8 @@ export async function createSalesInvoiceJournalEntry(invoice: any): Promise<stri
     if (existingEntries && existingEntries.length > 0) {
       // Delete existing entries to prevent duplicates
       console.log('Deleting existing journal entries for this invoice to prevent duplicates');
-      const { deleteDoc, doc, getFirestore } = await import('firebase/firestore');
-      const { app } = await import('$lib/firebase');
-      const db = getFirestore(app);
-      
       for (const existingEntry of existingEntries) {
-        await deleteDoc(doc(db, 'transactions', 'accounting', 'journalEntries', existingEntry.id));
+        await deleteDocFromCollection('transactions/accounting/journalEntries', existingEntry.id);
       }
     }
     
