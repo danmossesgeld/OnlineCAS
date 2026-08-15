@@ -7,17 +7,16 @@
   export let onAdd: () => void = () => {};
   export let showAddButton: boolean = false; // Set to false by default to avoid duplicate buttons
 
-  const DEFAULT_ROWS_COUNT = 1;
-
-  // Auto-add a default row if empty
-  if (rows.length === 0) {
-    for (let i = 0; i < DEFAULT_ROWS_COUNT; i++) {
-      const newRow: Record<string, any> = {};
-      columns.forEach(col => {
-        newRow[col.key] = (col.type === 'number' || col.key === 'amount' || col.key === 'qty' || col.key === 'price' || col.key === 'dsc') ? 0 : '';
-      });
-      rows = [...rows, newRow];
-    }
+  // Auto-add a default row if empty — routed through onAdd (the same handler the "+ Add Item"
+  // button uses) rather than synthesized locally. `rows` is a one-way prop (rows={items}, not
+  // bind:rows), so mutating this component's own `rows` variable directly used to create a row
+  // that only ever existed in this component's local copy: the parent's real array (formData.items
+  // / lineItems) stayed empty, so onUpdate(idx, ...) calls for that phantom row silently no-opped
+  // against a parent array with nothing at that index. Calling onAdd() instead pushes into the
+  // parent's own array through its own addItem(), which flows back down through the `items` prop
+  // like any other row.
+  if (editable && rows.length === 0) {
+    onAdd();
   }
 
   const handleAdd = () => onAdd();
