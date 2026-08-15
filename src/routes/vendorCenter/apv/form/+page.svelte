@@ -5,9 +5,9 @@
   import FormFooter from '$lib/components/FormFooter.svelte';
   import { onMount } from 'svelte';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
-  import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { addDocToCollection, updateDocInCollection, getDocFromCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
-  import { createApvJournalEntry, voidJournalEntriesForSource } from '$lib/utils/accountingService';
+  import { createApvJournalEntry, voidJournalEntriesForSource, postJournalEntryOrRollback } from '$lib/utils/accountingService';
   import { filterAccountsByType } from '$lib/utils/accountFilters';
   import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
   import { getCompanyProfile } from '$lib/utils/companyProfileService';
@@ -511,7 +511,15 @@
         // nothing to void, so there's no existing-entry case to worry about here (§5.6).
         if (status !== 'Draft') {
           const apvWithId = { ...newApvData, id: docRef.id };
-          await createApvJournalEntry(apvWithId);
+          const result = await postJournalEntryOrRollback({
+            postFn: () => createApvJournalEntry(apvWithId),
+            rollbackFn: () => deleteDocFromCollection('transactions/vendorCenter/apvs', docRef.id),
+            isCreate: true
+          });
+          if (!result.ok) {
+            alert(result.message);
+            return;
+          }
         }
 
         alert(status === 'Draft' ? 'APV saved as draft' : 'APV created successfully');
@@ -538,7 +546,15 @@
         // otherwise reverting to Draft would silently leave a stale "posted" entry in the ledger.
         const apvWithId = { ...updateApvData, id: docId };
         if (status !== 'Draft') {
-          await createApvJournalEntry(apvWithId);
+          const result = await postJournalEntryOrRollback({
+            postFn: () => createApvJournalEntry(apvWithId),
+            rollbackFn: async () => {}, // no snapshot of the prior state to restore on edit — see postJournalEntryOrRollback
+            isCreate: false
+          });
+          if (!result.ok) {
+            alert(result.message);
+            return;
+          }
         } else {
           await voidJournalEntriesForSource('apv', docId);
         }

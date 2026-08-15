@@ -7,10 +7,11 @@
   import {
     addDocToCollection,
     getDocFromCollection,
-    updateDocInCollection
+    updateDocInCollection,
+    deleteDocFromCollection
   } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
-  import { createCreditMemoJournalEntry } from '$lib/utils/accountingService';
+  import { createCreditMemoJournalEntry, postJournalEntryOrRollback } from '$lib/utils/accountingService';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { resolveItemAutofill } from '$lib/utils/itemAutofill';
   import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
@@ -439,6 +440,7 @@
       
       // Create or update
       let savedDocId;
+      const wasCreate = !(isEditMode && formData.id);
       if (isEditMode && formData.id) {
         // For edit mode, use the existing credit memo number
         savedDocId = formData.id;
@@ -451,14 +453,21 @@
         const docRef = await addDocToCollection('transactions/customerCenter/creditMemos', creditMemoData);
         savedDocId = docRef.id;
       }
-      
-      // Create journal entry when posted
+
+      // Create journal entry when posted (Credit Memo always saves 'Posted' — no Draft path,
+      // §3.3 — so this always runs). See postJournalEntryOrRollback for why a create-mode
+      // failure here rolls back the document instead of leaving it with no journal entry.
       if (creditMemoData.status === 'Posted') {
-        await createCreditMemoJournalEntry({
-          id: savedDocId,
-          ...creditMemoData
+        const result = await postJournalEntryOrRollback({
+          postFn: () => createCreditMemoJournalEntry({ id: savedDocId, ...creditMemoData }),
+          rollbackFn: () => deleteDocFromCollection('transactions/customerCenter/creditMemos', savedDocId),
+          isCreate: wasCreate
         });
-        
+        if (!result.ok) {
+          alert(result.message);
+          return;
+        }
+
         // Update the document status to reflect it's been posted
         await updateDocInCollection(
           'transactions/customerCenter/creditMemos',

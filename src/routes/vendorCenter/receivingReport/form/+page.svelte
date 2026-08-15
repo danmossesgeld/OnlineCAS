@@ -6,14 +6,15 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { 
-    addDocToCollection, 
-    getDocFromCollection, 
-    updateDocInCollection 
+  import {
+    addDocToCollection,
+    getDocFromCollection,
+    updateDocInCollection,
+    deleteDocFromCollection
   } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
   import { formatCurrency, formatDate } from '$lib/utils/formatters';
-  import { createReceivingReportJournalEntry } from '$lib/utils/accountingService';
+  import { createReceivingReportJournalEntry, postJournalEntryOrRollback } from '$lib/utils/accountingService';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { resolveItemAutofill } from '$lib/utils/itemAutofill';
   import { createFormModeStore } from '$lib/stores/formModeStore';
@@ -325,6 +326,7 @@
 
       // Create or update
       let savedDocId;
+      const wasCreate = !(isEditMode && formData.id);
       if (isEditMode && formData.id) {
         savedDocId = formData.id;
         await updateDocInCollection('transactions/vendorCenter/receivingReports', savedDocId, receivingReportData);
@@ -342,12 +344,19 @@
         savedDocId = docRef.id;
       }
 
-      // Create journal entry if the document is being posted
+      // Create journal entry if the document is being posted. See postJournalEntryOrRollback
+      // for why a create-mode failure here rolls back the document instead of leaving it with
+      // no journal entry.
       if (status === 'Posted') {
-        await createReceivingReportJournalEntry({
-          id: savedDocId,
-          ...receivingReportData
+        const result = await postJournalEntryOrRollback({
+          postFn: () => createReceivingReportJournalEntry({ id: savedDocId, ...receivingReportData }),
+          rollbackFn: () => deleteDocFromCollection('transactions/vendorCenter/receivingReports', savedDocId),
+          isCreate: wasCreate
         });
+        if (!result.ok) {
+          alert(result.message);
+          return;
+        }
       }
 
       alert(status === 'Draft' ? 'Receiving report saved as draft' : 'Receiving report saved successfully');

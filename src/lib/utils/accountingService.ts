@@ -531,25 +531,33 @@ export async function createReceiptJournalEntry(receipt: any): Promise<string | 
     let cashAccountId = 'cash';
     let cashAccountName = 'Cash';
 
-    // Payment method specific accounts
-    switch(receipt.paymentMethod) {
-      case 'check':
-        cashAccountId = 'bank';
-        cashAccountName = 'Bank Account';
-        break;
-      case 'credit-card':
-        cashAccountId = 'credit-card-receivable';
-        cashAccountName = 'Credit Card Receivable';
-        break;
-      case 'online':
-        cashAccountId = 'online-payments';
-        cashAccountName = 'Online Payment Account';
-        break;
-      default:
-        // Default to cash
-        break;
+    // Payment method specific accounts. Matches by the payment method's actual label text
+    // (paymentMethodName, e.g. "Check", "Bank Transfer") rather than receipt.paymentMethod,
+    // which is a Firestore doc id from otherlist/paymentmethods and essentially never equals
+    // one of the literal strings this switch used to compare against — every non-cash receipt
+    // silently fell through to the 'cash' default regardless of what was actually selected.
+    // Same label-substring-matching convention already used for tax classification (§5.1).
+    const receiptMethodLabel = (receipt.paymentMethodName || '').toLowerCase();
+    if (receiptMethodLabel.includes('check') || receiptMethodLabel.includes('cheque')) {
+      cashAccountId = 'bank';
+      cashAccountName = 'Bank Account';
+    } else if (receiptMethodLabel.includes('credit card')) {
+      cashAccountId = 'credit-card-receivable';
+      cashAccountName = 'Credit Card Receivable';
+    } else if (
+      receiptMethodLabel.includes('online') ||
+      receiptMethodLabel.includes('bank transfer') ||
+      receiptMethodLabel.includes('gcash') ||
+      receiptMethodLabel.includes('e-wallet')
+    ) {
+      cashAccountId = 'online-payments';
+      cashAccountName = 'Online Payment Account';
+    } else if (receiptMethodLabel.includes('bank')) {
+      cashAccountId = 'bank';
+      cashAccountName = 'Bank Account';
     }
-    
+    // else: stays 'cash' / 'Cash' — the correct default for a literal cash receipt
+
     // Calculate total transaction amount (cash + applied credits)
     const totalTransactionAmount = receipt.amount + (receipt.totalAppliedCredit || 0);
     
@@ -714,25 +722,30 @@ export async function createVendorPaymentJournalEntry(payment: any): Promise<str
     let cashAccountId = 'cash';
     let cashAccountName = 'Cash';
 
-    // Payment method specific accounts
-    switch(payment.paymentMethod) {
-      case 'check':
-        cashAccountId = 'bank';
-        cashAccountName = 'Bank Account';
-        break;
-      case 'credit-card':
-        cashAccountId = 'credit-card';
-        cashAccountName = 'Credit Card';
-        break;
-      case 'online':
-        cashAccountId = 'online-payments';
-        cashAccountName = 'Online Payment Account';
-        break;
-      default:
-        // Default to cash
-        break;
+    // Payment method specific accounts — see createReceiptJournalEntry's identical fix above
+    // for why this matches on paymentMethodName's label text rather than the raw paymentMethod
+    // doc id, which never matched these literals.
+    const paymentMethodLabel = (payment.paymentMethodName || '').toLowerCase();
+    if (paymentMethodLabel.includes('check') || paymentMethodLabel.includes('cheque')) {
+      cashAccountId = 'bank';
+      cashAccountName = 'Bank Account';
+    } else if (paymentMethodLabel.includes('credit card')) {
+      cashAccountId = 'credit-card';
+      cashAccountName = 'Credit Card';
+    } else if (
+      paymentMethodLabel.includes('online') ||
+      paymentMethodLabel.includes('bank transfer') ||
+      paymentMethodLabel.includes('gcash') ||
+      paymentMethodLabel.includes('e-wallet')
+    ) {
+      cashAccountId = 'online-payments';
+      cashAccountName = 'Online Payment Account';
+    } else if (paymentMethodLabel.includes('bank')) {
+      cashAccountId = 'bank';
+      cashAccountName = 'Bank Account';
     }
-    
+    // else: stays 'cash' / 'Cash'
+
     // Create the journal entry header
     const journalEntryData = {
       journalDate: payment.paymentDate,
@@ -854,6 +867,53 @@ export async function voidJournalEntriesForSource(sourceType: string, sourceId: 
   const existing = await getJournalEntriesForSource(sourceType, sourceId);
   for (const entry of existing) {
     await deleteDocFromCollection('transactions/accounting/journalEntries', entry.id);
+  }
+}
+
+/**
+ * Mitigates the non-atomic document-save/journal-entry-post gap that exists throughout this
+ * codebase (BLUEPRINT.md §6 "Enforcement gaps") — the source document and its journal entry are
+ * two independent Firestore writes, and this app has no backend to wrap them in one real
+ * transaction. This isn't full atomicity, but it stops the specific failure mode where a save
+ * silently "succeeds" with no ledger entry behind it and no indication anything went wrong:
+ *
+ * - On **create**, a posting failure deletes the document that was just created (a compensating
+ *   rollback) so the whole operation fails together rather than leaving an orphaned document —
+ *   the user sees a clear error and nothing new appears in the transaction list.
+ * - On **edit**, there's no snapshot of the prior document state to restore, so a posting
+ *   failure can't be rolled back the same way — the caller is told this distinctly (the document
+ *   change is saved, but the ledger may now be out of sync) instead of getting the same message
+ *   as every other failure.
+ *
+ * Every generator-backed transaction form's save handler should route its JE-posting call
+ * through this rather than a bare try/catch around `createXJournalEntry(...)`.
+ */
+export async function postJournalEntryOrRollback(params: {
+  postFn: () => Promise<string | null>;
+  rollbackFn: () => Promise<void>;
+  isCreate: boolean;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    await params.postFn();
+    return { ok: true };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Unknown error';
+    if (params.isCreate) {
+      try {
+        await params.rollbackFn();
+      } catch (rollbackError) {
+        console.error('Rollback after failed journal-entry post also failed:', rollbackError);
+        return {
+          ok: false,
+          message: `Failed to post to the ledger, and the automatic rollback also failed — this document may now exist with no journal entry. Please check manually before re-saving. (${detail})`
+        };
+      }
+      return { ok: false, message: `Failed to post to the ledger, so the save was rolled back — nothing was created. Please try again. (${detail})` };
+    }
+    return {
+      ok: false,
+      message: `Your changes were saved, but the ledger update failed — the ledger may now be out of sync with this document until you retry. (${detail})`
+    };
   }
 }
 

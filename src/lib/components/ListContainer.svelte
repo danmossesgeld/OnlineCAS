@@ -16,8 +16,24 @@
   import { goto } from '$app/navigation';
   import FireTable from '$lib/components/FireTable.svelte';
   import { deleteDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { voidJournalEntriesForSource } from '$lib/utils/accountingService';
   import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
   import { app } from '$lib/utils/firebase';
+
+  // Maps this component's documentType prop to the sourceType string journalEntries actually
+  // store (§3.6/§5.2) — used only to void a deleted transaction's journal entry so it doesn't
+  // stay orphaned in the ledger. 'journal' (General Journal) is deliberately absent: that
+  // document *is* the journal entry, so deleting it already removes the ledger record directly,
+  // with nothing separate left to void.
+  const DOCUMENT_TYPE_TO_SOURCE_TYPE: Record<string, string> = {
+    invoice: 'salesInvoice',
+    creditMemo: 'creditMemo',
+    receipt: 'receipt',
+    apv: 'apv',
+    payment: 'payment',
+    'receiving report': 'receivingReport',
+    adjustment: 'inventory_adjustment'
+  };
 
   // Props for collection path
   export let rootCollection: string;
@@ -263,6 +279,22 @@
       try {
         // Using the path string format with the collection path and document ID
         await deleteDocFromCollection(`${rootCollection}/${parentCollection}/${subCollectionName}`, docId);
+
+        // Void this transaction's journal entry too — deleting the source document used to
+        // leave its ledger entry behind permanently, silently diverging the transaction list
+        // from the general ledger (BLUEPRINT.md §4.1 "Hard delete only, everywhere"). A failure
+        // here doesn't roll back the document delete (already committed) — it's reported
+        // distinctly so a stale ledger entry doesn't go unnoticed.
+        const sourceType = DOCUMENT_TYPE_TO_SOURCE_TYPE[documentType];
+        if (sourceType) {
+          try {
+            await voidJournalEntriesForSource(sourceType, docId);
+          } catch (voidError) {
+            console.error(`Error voiding journal entry for deleted ${documentType}:`, voidError);
+            alert(`${documentType[0].toUpperCase() + documentType.slice(1)} was deleted, but its journal entry could not be removed automatically — check the General Ledger for an orphaned entry.`);
+          }
+        }
+
         alert(`${documentType[0].toUpperCase() + documentType.slice(1)} deleted successfully.`);
         // Refresh summary data after deletion
         await loadSummaryData();

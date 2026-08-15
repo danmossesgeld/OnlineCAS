@@ -5,10 +5,10 @@
   import FormFooter from '$lib/components/FormFooter.svelte';
   import { onMount } from 'svelte';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
-  import { addDocToCollection, updateDocInCollection, getDocFromCollection, queryCollectionDocs } from '$lib/utils/firestoreCrud';
+  import { addDocToCollection, updateDocInCollection, getDocFromCollection, queryCollectionDocs, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
   import type { FilterCondition } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
-  import { createReceiptJournalEntry } from '$lib/utils/accountingService';
+  import { createReceiptJournalEntry, postJournalEntryOrRollback } from '$lib/utils/accountingService';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   
@@ -659,7 +659,7 @@
         });
       
       // Create the receipt data object
-      let receiptData;
+      let receiptData: any;
       if (isCreateMode) {
         // Generate a guaranteed unique receipt number
         const receiptNo = await generateReceiptNumber();
@@ -711,17 +711,24 @@
         };
       }
       
-      let docRef;
-      
+      let docRef: any;
+
       if (isCreateMode) {
         // Add new receipt
         docRef = await addDocToCollection('transactions/customerCenter/receipts', receiptData);
 
-        // Create journal entry
-        const journalEntryId = await createReceiptJournalEntry({
-          ...receiptData,
-          id: docRef.id
+        // Create journal entry. See postJournalEntryOrRollback for why a create-mode failure
+        // here rolls back the receipt document — run before the balance deltas below, so a
+        // failed post never touches any invoice/credit-memo balances at all.
+        const jeResult = await postJournalEntryOrRollback({
+          postFn: () => createReceiptJournalEntry({ ...receiptData, id: docRef.id }),
+          rollbackFn: () => deleteDocFromCollection('transactions/customerCenter/receipts', docRef.id),
+          isCreate: true
         });
+        if (!jeResult.ok) {
+          alert(jeResult.message);
+          return;
+        }
 
         // originalAppliedCredits/originalInvoicePayments are empty in create mode, so these
         // deltas equal the full applied/allocated amounts — same effect as before, just unified
@@ -736,10 +743,15 @@
         await applyInvoiceBalanceDeltas(allocationArray, originalInvoicePayments);
 
         // Create/update journal entry for edit mode
-        const journalEntryId = await createReceiptJournalEntry({
-          ...receiptData,
-          id: docId
+        const jeResult = await postJournalEntryOrRollback({
+          postFn: () => createReceiptJournalEntry({ ...receiptData, id: docId }),
+          rollbackFn: async () => {}, // no snapshot of the prior state to restore on edit — see postJournalEntryOrRollback
+          isCreate: false
         });
+        if (!jeResult.ok) {
+          alert(jeResult.message);
+          return;
+        }
       }
       
       // Land on the saved receipt's view page, not the list — consistent with Sales

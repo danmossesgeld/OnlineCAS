@@ -5,6 +5,8 @@
   import { theme } from '$lib/stores/themeStore';
   import { formatCurrency } from '$lib/utils/formatters';
   import { queryCollectionDocs } from '$lib/utils/firestoreCrud';
+  import { getAllAccounts, getAccountBalances, getBalanceSheetData, FSClassification } from '$lib/utils/reportingService';
+  import { normalizeAccountType } from '$lib/utils/accountTypes';
 
   // Dashboard data
   let isLoading: boolean = true;
@@ -264,83 +266,61 @@
     }
   }
   
+  /**
+   * Cash/AR/AP and the two ratio tiles used to compute their figures by keyword-substring-
+   * matching account names across the current year's journal entries, then substitute
+   * completely unrelated totals for them — cashBalance was literally set to totalAssets,
+   * arTotal to totalRevenue, apTotal to totalLiabilities, and quickRatio never actually
+   * subtracted anything ("- 0"). None of these were real, and every comment on them said so.
+   *
+   * These now come from the same reporting engine every other report uses (reportingService.ts,
+   * §5.4): getAllAccounts() for the real Chart-of-Accounts type of each account (Cash/AR/AP are
+   * point-in-time balance-sheet figures, not year-to-date flows, so the range runs from account
+   * inception to today, not just this calendar year) cross-referenced against
+   * getAccountBalances() to sum only accounts actually typed 'bank' / 'accounts-receivable' /
+   * 'accounts-payable' — and getBalanceSheetData() for real current-ratio/quick-ratio inputs
+   * (current assets ÷ current liabilities; quick ratio additionally excludes inventory-named
+   * current-asset accounts, which the old code never excluded at all).
+   */
   async function calculateMetricsFromJournalEntries() {
     try {
-      // Get all journal entries for the current year
-      const filters: any = [
-        { field: 'journalDate', operator: '>=', value: startOfYear },
-        { field: 'journalDate', operator: '<=', value: endOfYear },
-        { field: 'isPosted', operator: '==', value: true }
-      ];
-      
-      const journalEntries: any[] = await queryCollectionDocs('accounting/journalEntries', filters);
-      console.log('Calculating metrics from journal entries:', journalEntries?.length || 0);
-      
-      if (journalEntries && journalEntries.length > 0) {
-        let totalRevenue = 0;
-        let totalExpenses = 0;
-        let totalAssets = 0;
-        let totalLiabilities = 0;
-        let totalEquity = 0;
-        
-        journalEntries.forEach((entry: any) => {
-          if (entry.lines && Array.isArray(entry.lines)) {
-            entry.lines.forEach((line: any) => {
-              if (line.accountName) {
-                const accountName = line.accountName.toLowerCase();
-                const amount = line.credit > 0 ? line.credit : line.debit;
-                
-                // Revenue accounts
-                if (accountName.includes('revenue') || 
-                    accountName.includes('sales') || 
-                    accountName.includes('income')) {
-                  totalRevenue += amount;
-                }
-                // Expense accounts
-                else if (accountName.includes('expense') || 
-                         accountName.includes('cost')) {
-                  totalExpenses += amount;
-                }
-                // Asset accounts
-                else if (accountName.includes('cash') || 
-                         accountName.includes('bank') ||
-                         accountName.includes('receivable') ||
-                         accountName.includes('inventory')) {
-                  totalAssets += amount;
-                }
-                // Liability accounts
-                else if (accountName.includes('payable') || 
-                         accountName.includes('tax') ||
-                         accountName.includes('loan')) {
-                  totalLiabilities += amount;
-                }
-                // Equity accounts
-                else if (accountName.includes('equity') || 
-                         accountName.includes('capital') ||
-                         accountName.includes('retained')) {
-                  totalEquity += amount;
-                }
-              }
-            });
-          }
-        });
-        
-        // Calculate metrics
-        cashBalance = totalAssets; // Simplified - just use total assets for now
-        arTotal = totalRevenue; // Simplified - use revenue as AR
-        apTotal = totalLiabilities; // Use liabilities as AP
-        
-        // Calculate ratios
-        currentRatio = totalLiabilities > 0 ? totalAssets / totalLiabilities : 0;
-        quickRatio = totalLiabilities > 0 ? (totalAssets - 0) / totalLiabilities : 0; // Simplified
-        
-        console.log('Calculated metrics from journal entries:', { 
-          totalRevenue, totalExpenses, totalAssets, totalLiabilities, totalEquity,
-          cashBalance, arTotal, apTotal, currentRatio, quickRatio 
-        });
-      }
+      const asOfRange = { startDate: new Date(0), endDate: today };
+      const [accounts, balances, balanceSheet] = await Promise.all([
+        getAllAccounts(),
+        getAccountBalances(asOfRange),
+        getBalanceSheetData(asOfRange)
+      ]);
+
+      const accountsById = new Map(accounts.map((a) => [a.id, a]));
+
+      let cash = 0;
+      let ar = 0;
+      let ap = 0;
+      balances.forEach((balance) => {
+        const account = accountsById.get(balance.accountId);
+        if (!account) return; // unmatched/synthesized balance — no real Chart of Accounts type to key off
+        const rawType = normalizeAccountType(account.accountType);
+        if (rawType === 'bank') cash += balance.balance;
+        else if (rawType === 'accounts-receivable') ar += balance.balance;
+        else if (rawType === 'accounts-payable') ap += balance.balance;
+      });
+
+      cashBalance = cash;
+      arTotal = ar;
+      apTotal = ap;
+
+      currentRatio = balanceSheet.totalCurrentLiabilities > 0
+        ? balanceSheet.totalCurrentAssets / balanceSheet.totalCurrentLiabilities
+        : 0;
+
+      const inventoryTotal = balances
+        .filter((b) => b.fsClassification === FSClassification.CurrentAsset && b.accountName.toLowerCase().includes('inventory'))
+        .reduce((sum, b) => sum + b.balance, 0);
+      quickRatio = balanceSheet.totalCurrentLiabilities > 0
+        ? (balanceSheet.totalCurrentAssets - inventoryTotal) / balanceSheet.totalCurrentLiabilities
+        : 0;
     } catch (error) {
-      console.error('Error calculating metrics from journal entries:', error);
+      console.error('Error calculating dashboard metrics:', error);
     }
   }
   

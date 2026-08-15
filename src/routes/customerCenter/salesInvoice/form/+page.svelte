@@ -5,9 +5,9 @@
   import FormFooter from '$lib/components/FormFooter.svelte';
   import { onMount } from 'svelte';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
-  import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { addDocToCollection, updateDocInCollection, getDocFromCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
-  import { createSalesInvoiceJournalEntry, voidJournalEntriesForSource } from '$lib/utils/accountingService';
+  import { createSalesInvoiceJournalEntry, voidJournalEntriesForSource, postJournalEntryOrRollback } from '$lib/utils/accountingService';
   import { resolveItemAutofill } from '$lib/utils/itemAutofill';
   import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
   import { getCompanyProfile } from '$lib/utils/companyProfileService';
@@ -563,7 +563,15 @@
         // has nothing to void, so there's no existing-entry case to worry about here (§5.6).
         if (actualStatus !== 'Draft') {
           const invoiceWithId = { ...newInvoiceData, id: docRef.id };
-          await createSalesInvoiceJournalEntry(invoiceWithId);
+          const result = await postJournalEntryOrRollback({
+            postFn: () => createSalesInvoiceJournalEntry(invoiceWithId),
+            rollbackFn: () => deleteDocFromCollection('transactions/customerCenter/salesInvoices', docRef.id),
+            isCreate: true
+          });
+          if (!result.ok) {
+            alert(result.message);
+            return;
+          }
         }
 
         alert(actualStatus === 'Draft' ? 'Invoice saved as draft' : 'Invoice created successfully');
@@ -594,7 +602,15 @@
         // otherwise reverting to Draft would silently leave a stale "posted" entry in the ledger.
         const invoiceWithId = { ...updateInvoiceData, id: docId };
         if (actualStatus !== 'Draft') {
-          await createSalesInvoiceJournalEntry(invoiceWithId);
+          const result = await postJournalEntryOrRollback({
+            postFn: () => createSalesInvoiceJournalEntry(invoiceWithId),
+            rollbackFn: async () => {}, // no snapshot of the prior state to restore on edit — see postJournalEntryOrRollback
+            isCreate: false
+          });
+          if (!result.ok) {
+            alert(result.message);
+            return;
+          }
         } else {
           await voidJournalEntriesForSource('salesInvoice', docId);
         }

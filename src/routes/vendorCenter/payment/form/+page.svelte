@@ -5,9 +5,9 @@
   import FormFooter from '$lib/components/FormFooter.svelte';
   import { onMount } from 'svelte';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
-  import { addDocToCollection, updateDocInCollection, getDocFromCollection, queryCollectionDocs, type FilterCondition } from '$lib/utils/firestoreCrud';
+  import { addDocToCollection, updateDocInCollection, getDocFromCollection, queryCollectionDocs, deleteDocFromCollection, type FilterCondition } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
-  import { createVendorPaymentJournalEntry } from '$lib/utils/accountingService';
+  import { createVendorPaymentJournalEntry, postJournalEntryOrRollback } from '$lib/utils/accountingService';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   
@@ -398,17 +398,24 @@
         paymentData.createdAt = new Date();
       }
       
-      let docRef;
-      
+      let docRef: any;
+
       if (isCreateMode) {
         // Add new payment
         docRef = await addDocToCollection('transactions/vendorCenter/payments', paymentData);
 
-        // Create journal entry
-        const journalEntryId = await createVendorPaymentJournalEntry({
-          ...paymentData,
-          id: docRef.id
+        // Create journal entry. See postJournalEntryOrRollback for why a create-mode failure
+        // here rolls back the payment document — run before the balance deltas below, so a
+        // failed post never touches any APV balances at all.
+        const jeResult = await postJournalEntryOrRollback({
+          postFn: () => createVendorPaymentJournalEntry({ ...paymentData, id: docRef.id }),
+          rollbackFn: () => deleteDocFromCollection('transactions/vendorCenter/payments', docRef.id),
+          isCreate: true
         });
+        if (!jeResult.ok) {
+          alert(jeResult.message);
+          return;
+        }
 
         // originalBillPayments is empty in create mode, so this delta equals the full allocated
         // amount per bill.
@@ -423,10 +430,15 @@
         // entry's id unchanged if one already exists for this payment (accountingService.ts) —
         // it won't re-sync amounts on edit, but this at least ensures one gets created if it's
         // ever missing, instead of doing nothing on every edit as before.
-        await createVendorPaymentJournalEntry({
-          ...paymentData,
-          id: docId
+        const jeResult = await postJournalEntryOrRollback({
+          postFn: () => createVendorPaymentJournalEntry({ ...paymentData, id: docId }),
+          rollbackFn: async () => {}, // no snapshot of the prior state to restore on edit — see postJournalEntryOrRollback
+          isCreate: false
         });
+        if (!jeResult.ok) {
+          alert(jeResult.message);
+          return;
+        }
       }
       
       // Land on the saved payment's view page, not the list — consistent with Sales

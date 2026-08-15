@@ -20,6 +20,7 @@
     totalLiabilities: number;
     totalEquity: number;
     totalLiabilitiesAndEquity: number;
+    isBalanced: boolean;
   } = {
     currentAssets: [],
     nonCurrentAssets: [],
@@ -33,7 +34,8 @@
     totalNonCurrentLiabilities: 0,
     totalLiabilities: 0,
     totalEquity: 0,
-    totalLiabilitiesAndEquity: 0
+    totalLiabilitiesAndEquity: 0,
+    isBalanced: true
   };
   
   // Default date is end of current month
@@ -153,6 +155,15 @@
   on:export={handleExport}
 >
   <div slot="report-content">
+    {#if !reportData.isBalanced}
+      <div class="mb-4 px-4 py-3 rounded-lg flex items-start gap-2.5" style="background: var(--color-error-50); border: 1px solid var(--color-error-300);">
+        <iconify-icon icon="material-symbols:warning-rounded" width="20" height="20" style="color: var(--color-error-600); flex-shrink: 0; margin-top: 1px;"></iconify-icon>
+        <div>
+          <p class="text-sm font-semibold" style="color: var(--color-error-800);">This balance sheet does not balance.</p>
+          <p class="text-xs mt-0.5" style="color: var(--color-error-700);">Total Assets ({formatCurrency(reportData.totalAssets)}) don't equal Total Liabilities and Equity ({formatCurrency(reportData.totalLiabilitiesAndEquity)}) — a difference of {formatCurrency(Math.abs(reportData.totalAssets - reportData.totalLiabilitiesAndEquity))}, even after including Retained Earnings. This means at least one posted journal entry is genuinely unbalanced; check the Audit Trail for out-of-balance entries before trusting this report.</p>
+        </div>
+      </div>
+    {/if}
     {#if reportData.currentAssets.length === 0 && reportData.nonCurrentAssets.length === 0 && reportData.currentLiabilities.length === 0 && reportData.nonCurrentLiabilities.length === 0 && reportData.equity.length === 0}
       <div class="text-center py-10">
         <p class="text-sm" style="color: var(--color-neutral-600);">No account balances found for this period.</p>

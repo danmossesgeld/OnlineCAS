@@ -351,63 +351,46 @@ export async function getTrialBalanceData(dateRange: DateRange): Promise<{
   accounts: AccountBalance[];
   totalDebit: number;
   totalCredit: number;
+  isBalanced: boolean;
 }> {
   try {
     // Get account balances
     const accountBalances = await getAccountBalances(dateRange);
-    
+
     // Filter accounts with non-zero balances
-    let filteredAccounts = accountBalances.filter(
+    const filteredAccounts = accountBalances.filter(
       account => Math.abs(account.balance) > 0.01
     );
-    
+
     // Calculate total debits and credits for trial balance
-    let totalDebit = filteredAccounts.reduce(
-      (sum, account) => sum + account.debit, 
+    const totalDebit = filteredAccounts.reduce(
+      (sum, account) => sum + account.debit,
       0
     );
-    
-    let totalCredit = filteredAccounts.reduce(
-      (sum, account) => sum + account.credit, 
+
+    const totalCredit = filteredAccounts.reduce(
+      (sum, account) => sum + account.credit,
       0
     );
-    
-    // Check if trial balance balances, if not, add retained earnings
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      // Trial balance doesn't balance, need to add retained earnings
-      const retainedEarningsAmount = totalDebit - totalCredit;
-      
-      // Ensure retained earnings account exists
-      const retainedEarningsAccountId = await ensureRetainedEarningsAccount();
-      
-      // Add retained earnings to trial balance
-      const retainedEarningsAccount: AccountBalance = {
-        accountId: retainedEarningsAccountId,
-        accountCode: '3500',
-        accountName: 'Retained Earnings',
-        accountType: AccountType.Equity,
-        fsClassification: FSClassification.Equity,
-        debit: 0,
-        credit: Math.max(0, retainedEarningsAmount),
-        balance: retainedEarningsAmount,
-        normalBalance: NormalBalance.Credit
-      };
-      
-      filteredAccounts.push(retainedEarningsAccount);
-      
-      // Recalculate totals
-      totalDebit = filteredAccounts.reduce((sum, account) => sum + account.debit, 0);
-      totalCredit = filteredAccounts.reduce((sum, account) => sum + account.credit, 0);
-    }
-    
+
+    // A Trial Balance should NEVER need a plug to balance — unlike a Balance Sheet, which
+    // legitimately needs a Retained Earnings line even when everything is correct, a Trial
+    // Balance existing purely to prove debits equal credits. A previous version of this
+    // function auto-plugged a synthetic "Retained Earnings" line here to force it to visually
+    // balance whenever it didn't — which is exactly backwards for the one report whose entire
+    // job is catching this class of bug. It now reports the true totals and lets the caller
+    // decide how to warn, rather than hiding a real problem.
+    const isBalanced = Math.abs(totalDebit - totalCredit) <= 0.01;
+
     return {
       accounts: filteredAccounts,
       totalDebit,
-      totalCredit
+      totalCredit,
+      isBalanced
     };
   } catch (error) {
     console.error('Error generating Trial Balance:', error);
-    return { accounts: [], totalDebit: 0, totalCredit: 0 };
+    return { accounts: [], totalDebit: 0, totalCredit: 0, isBalanced: true };
   }
 }
 
@@ -586,6 +569,7 @@ export async function getBalanceSheetData(dateRange: DateRange): Promise<{
   totalLiabilities: number;
   totalEquity: number;
   totalLiabilitiesAndEquity: number;
+  isBalanced: boolean;
 }> {
   try {
     const accountBalances = await getAccountBalances(dateRange);
@@ -621,36 +605,42 @@ export async function getBalanceSheetData(dateRange: DateRange): Promise<{
     const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
     
     const totalEquity = equity.reduce((sum, account) => sum + account.balance, 0);
-    
-    // Check if balance sheet balances, if not, add retained earnings
+
+    // Retained Earnings — accumulated net income from all activity strictly before this
+    // report's date range, computed the textbook-correct way (an Income Statement run over
+    // everything prior to the period start), not "whatever number happens to force the sheet
+    // to balance." A previous version of this function only ever added a Retained Earnings
+    // line when the sheet was already out of balance, sized to exactly cancel out that
+    // imbalance — which meant it was silently absorbing real bugs (an unbalanced journal entry
+    // upstream) into what looked like a legitimate equity balance. It's added here whenever
+    // there's real prior-period income to fold in, whether or not the sheet already balances;
+    // if it still doesn't balance afterward, that's reported via isBalanced rather than plugged.
     let adjustedTotalEquity = totalEquity;
     let adjustedEquity = [...equity];
-    
-    if (Math.abs(totalAssets - totalLiabilities - totalEquity) > 0.01) {
-      // Balance sheet doesn't balance, need to add retained earnings
-      const retainedEarningsAmount = totalAssets - totalLiabilities - totalEquity;
-      
-      // Ensure retained earnings account exists
+
+    const priorPeriodEnd = new Date(dateRange.startDate);
+    priorPeriodEnd.setDate(priorPeriodEnd.getDate() - 1);
+    const priorIncome = await getIncomeStatementData({ startDate: new Date(0), endDate: priorPeriodEnd }).catch(() => null);
+
+    if (priorIncome && Math.abs(priorIncome.netIncome) > 0.01) {
       const retainedEarningsAccountId = await ensureRetainedEarningsAccount();
-      
-      // Add retained earnings to equity
       adjustedEquity.push({
         accountId: retainedEarningsAccountId,
         accountCode: '3500',
         accountName: 'Retained Earnings',
         accountType: AccountType.Equity,
         fsClassification: FSClassification.Equity,
-        debit: 0,
-        credit: Math.max(0, retainedEarningsAmount),
-        balance: retainedEarningsAmount,
+        debit: priorIncome.netIncome < 0 ? Math.abs(priorIncome.netIncome) : 0,
+        credit: priorIncome.netIncome > 0 ? priorIncome.netIncome : 0,
+        balance: priorIncome.netIncome,
         normalBalance: NormalBalance.Credit
       });
-      
-      adjustedTotalEquity = totalEquity + retainedEarningsAmount;
+      adjustedTotalEquity = totalEquity + priorIncome.netIncome;
     }
-    
+
     const totalLiabilitiesAndEquity = totalLiabilities + adjustedTotalEquity;
-    
+    const isBalanced = Math.abs(totalAssets - totalLiabilitiesAndEquity) <= 0.01;
+
     return {
       currentAssets,
       nonCurrentAssets,
@@ -664,7 +654,8 @@ export async function getBalanceSheetData(dateRange: DateRange): Promise<{
       totalNonCurrentLiabilities,
       totalLiabilities,
       totalEquity: adjustedTotalEquity,
-      totalLiabilitiesAndEquity
+      totalLiabilitiesAndEquity,
+      isBalanced
     };
   } catch (error) {
     console.error('Error generating balance sheet data:', error);
@@ -724,8 +715,13 @@ export async function getARAgingData(asOfDate: Date): Promise<{
           entry.lines.forEach((line: any) => {
             // Look for receivable accounts
             if (line.accountName && line.accountName.toLowerCase().includes('receivable')) {
-              const customerId = entry.customer || entry.customerId || 'unknown';
-              const customer = customerMap[customerId] || { name: customerId };
+              // Every generator tags its A/R line itself with nameId/nameName (§5.2) — read
+              // that directly rather than the header-level entry.customer/customerId, which no
+              // generator actually sets. Falls back to a masterlist lookup, then the raw id,
+              // only if an older/manual entry didn't carry the line-level tag.
+              const customerId = line.nameId || entry.customer || entry.customerId || 'unknown';
+              const customerName = line.nameName || customerMap[customerId]?.name || customerId;
+              const customer = { name: customerName };
               
               // Get entry date
               const entryDate = entry.journalDate?.seconds ? 
@@ -848,8 +844,13 @@ export async function getAPAgingData(asOfDate: Date): Promise<{
           entry.lines.forEach((line: any) => {
             // Look for payable accounts
             if (line.accountName && line.accountName.toLowerCase().includes('payable')) {
-              const vendorId = entry.vendor || entry.vendorId || 'unknown';
-              const vendor = vendorMap[vendorId] || { name: vendorId };
+              // Every generator tags its A/P line itself with nameId/nameName (§5.2) — read
+              // that directly rather than the header-level entry.vendor/vendorId, which no
+              // generator actually sets. Falls back to a masterlist lookup, then the raw id,
+              // only if an older/manual entry didn't carry the line-level tag.
+              const vendorId = line.nameId || entry.vendor || entry.vendorId || 'unknown';
+              const vendorName = line.nameName || vendorMap[vendorId]?.name || vendorId;
+              const vendor = { name: vendorName };
               
               // Get entry date
               const entryDate = entry.journalDate?.seconds ? 

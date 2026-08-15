@@ -6,8 +6,8 @@
   import { onMount } from 'svelte';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { resolveItemAutofill } from '$lib/utils/itemAutofill';
-  import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
-  import { createInventoryAdjustmentJournalEntry, voidJournalEntriesForSource } from '$lib/utils/accountingService';
+  import { addDocToCollection, updateDocInCollection, getDocFromCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
+  import { createInventoryAdjustmentJournalEntry, voidJournalEntriesForSource, postJournalEntryOrRollback } from '$lib/utils/accountingService';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   
@@ -370,7 +370,15 @@
         // Draft has nothing to void, so there's no existing-entry case to worry about here.
         if (status !== 'Draft') {
           const adjustmentWithId = { ...newAdjustmentData, id: docRef.id };
-          await createInventoryAdjustmentJournalEntry(adjustmentWithId);
+          const result = await postJournalEntryOrRollback({
+            postFn: () => createInventoryAdjustmentJournalEntry(adjustmentWithId),
+            rollbackFn: () => deleteDocFromCollection('inventory/transactions/adjustments', docRef.id),
+            isCreate: true
+          });
+          if (!result.ok) {
+            alert(result.message);
+            return;
+          }
         }
 
         alert(status === 'Draft' ? 'Inventory adjustment saved as draft' : 'Inventory adjustment created successfully');
@@ -389,7 +397,15 @@
         // otherwise reverting to Draft would silently leave a stale "posted" entry in the ledger.
         const adjustmentWithId = { ...updateAdjustmentData, id: docId };
         if (status !== 'Draft') {
-          await createInventoryAdjustmentJournalEntry(adjustmentWithId);
+          const result = await postJournalEntryOrRollback({
+            postFn: () => createInventoryAdjustmentJournalEntry(adjustmentWithId),
+            rollbackFn: async () => {}, // no snapshot of the prior state to restore on edit — see postJournalEntryOrRollback
+            isCreate: false
+          });
+          if (!result.ok) {
+            alert(result.message);
+            return;
+          }
         } else {
           await voidJournalEntriesForSource('inventory_adjustment', docId);
         }

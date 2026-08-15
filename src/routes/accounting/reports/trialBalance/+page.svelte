@@ -10,10 +10,12 @@
     accounts: AccountBalance[];
     totalDebit: number;
     totalCredit: number;
+    isBalanced: boolean;
   } = {
     accounts: [],
     totalDebit: 0,
-    totalCredit: 0
+    totalCredit: 0,
+    isBalanced: true
   };
   
   // Default date range is current month
@@ -91,6 +93,15 @@
   on:export={handleExport}
 >
   <div slot="report-content">
+    {#if !reportData.isBalanced}
+      <div class="mb-4 px-4 py-3 rounded-lg flex items-start gap-2.5" style="background: var(--color-error-50); border: 1px solid var(--color-error-300);">
+        <iconify-icon icon="material-symbols:warning-rounded" width="20" height="20" style="color: var(--color-error-600); flex-shrink: 0; margin-top: 1px;"></iconify-icon>
+        <div>
+          <p class="text-sm font-semibold" style="color: var(--color-error-800);">This trial balance does not balance.</p>
+          <p class="text-xs mt-0.5" style="color: var(--color-error-700);">Total debits ({formatCurrency(reportData.totalDebit)}) don't equal total credits ({formatCurrency(reportData.totalCredit)}) — a difference of {formatCurrency(Math.abs(reportData.totalDebit - reportData.totalCredit))}. This means at least one posted journal entry is genuinely unbalanced; check the Audit Trail for out-of-balance entries before trusting any report for this period.</p>
+        </div>
+      </div>
+    {/if}
     {#if reportData.accounts.length === 0}
       <div class="text-center py-10">
         <p class="text-sm" style="color: var(--color-neutral-600);">No account balances found for this period.</p>
