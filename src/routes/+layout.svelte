@@ -2,9 +2,10 @@
 	import '../app.css';
 	import Sidebar from '../lib/components/Sidebar.svelte';
 	import { onMount } from 'svelte';
-	import { getAuth, onAuthStateChanged } from 'firebase/auth';
+	import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 	import { app } from '../lib/firebase';
 	import { user } from '../lib/user';
+	import { loadUserProfile, clearUserProfile } from '$lib/stores/userProfile';
 	import { theme } from '$lib/stores/themeStore';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -19,11 +20,28 @@
 		theme.init();
 
 		const auth = getAuth(app);
-		onAuthStateChanged(auth, (u) => {
+		onAuthStateChanged(auth, async (u) => {
 			user.set(u);
 			const path = window.location.pathname;
-			if (!u && path !== '/') goto('/');
-			if (u && path === '/') goto('/main/dashboard');
+
+			if (!u) {
+				clearUserProfile();
+				if (path !== '/') goto('/');
+				return;
+			}
+
+			// Deactivated accounts (see Admin Tools > Users) are blocked here, not just hidden
+			// in the UI — a deactivated user who's still signed in gets signed back out on the
+			// very next auth-state check.
+			const profile = await loadUserProfile(u);
+			if (profile && profile.isActive === false) {
+				await signOut(auth);
+				clearUserProfile();
+				goto('/');
+				return;
+			}
+
+			if (path === '/') goto('/main/dashboard');
 		});
 	});
 </script>

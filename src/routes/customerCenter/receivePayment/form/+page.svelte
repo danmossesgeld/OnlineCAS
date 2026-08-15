@@ -103,6 +103,13 @@
   let allocatedTotal = 0;
   let unallocatedAmount = 0;
 
+  // Snapshots of what was actually persisted when this receipt was loaded (empty in create mode).
+  // Saving computes delta = current − original per invoice/credit so edits adjust balances by the
+  // *change* rather than re-applying the full current amount on top of what a prior save already
+  // applied — the latter double-counted on every edit and, for invoices, never ran at all.
+  let originalInvoicePayments: Array<{ invoiceId: string; amountPaid: number }> = [];
+  let originalAppliedCredits: Array<{ id: string; type: 'credit_memo' | 'advance_payment'; appliedAmount: number }> = [];
+
   // Credit system variables
   let availableCreditMemos: CreditMemo[] = [];
   let availableAdvancePayments: AdvancePayment[] = [];
@@ -198,7 +205,9 @@
           invoiceAllocations[payment.invoiceId] = payment.amountPaid;
         });
       }
-      
+      // Snapshot exactly what's persisted right now, before the user edits anything further
+      originalInvoicePayments = (docData.invoicePayments || []).map(p => ({ invoiceId: p.invoiceId, amountPaid: p.amountPaid }));
+
       // Populate applied credits
       appliedCredits = [];
       totalAppliedCredit = 0;
@@ -212,6 +221,8 @@
         }));
         totalAppliedCredit = docData.totalAppliedCredit || appliedCredits.reduce((sum, c) => sum + c.appliedAmount, 0);
       }
+      // Snapshot exactly what's persisted right now, before the user edits anything further
+      originalAppliedCredits = (docData.appliedCredits || []).map(c => ({ id: c.id, type: c.type, appliedAmount: c.appliedAmount }));
       
       // Load outstanding invoices and available credits for this customer
       if (docData.customer) {
@@ -520,6 +531,86 @@
     throw new Error('Unable to generate a unique receipt number after multiple attempts. Please try again.');
   }
 
+  // Applies the *change* in applied-credit amounts since the receipt was loaded (delta = new −
+  // original) to each credit memo's/advance payment's cumulative appliedAmount. Re-adding the full
+  // current amount on every save (the previous behavior) double-counted a credit that was already
+  // applied by a prior save of this same receipt whenever it was edited and re-saved unchanged.
+  async function applyCreditDeltas(
+    currentCredits: AppliedCredit[],
+    originalCredits: Array<{ id: string; type: 'credit_memo' | 'advance_payment'; appliedAmount: number }>
+  ) {
+    const keys = new Set([
+      ...currentCredits.map(c => `${c.type}:${c.id}`),
+      ...originalCredits.map(c => `${c.type}:${c.id}`)
+    ]);
+
+    for (const key of keys) {
+      const sep = key.indexOf(':');
+      const type = key.slice(0, sep) as 'credit_memo' | 'advance_payment';
+      const id = key.slice(sep + 1);
+      const newAmount = currentCredits.find(c => c.id === id && c.type === type)?.appliedAmount || 0;
+      const oldAmount = originalCredits.find(c => c.id === id && c.type === type)?.appliedAmount || 0;
+      const delta = newAmount - oldAmount;
+      if (delta === 0) continue;
+
+      const collectionPath = type === 'credit_memo' ? 'transactions/customerCenter/creditMemos' : 'transactions/customerCenter/receipts';
+      const doc = await getDocFromCollection(collectionPath, id) as any;
+      if (!doc) continue;
+
+      const newApplied = Math.max(0, (doc.appliedAmount || 0) + delta);
+      const totalAmount = (type === 'credit_memo' ? doc.totalAmount : doc.amount) || 0;
+
+      let newStatus = doc.status;
+      if (totalAmount > 0 && newApplied >= totalAmount) {
+        newStatus = 'Fully Applied';
+      } else if (newApplied > 0) {
+        newStatus = 'Partially Applied';
+      } else {
+        newStatus = 'Posted';
+      }
+
+      await updateDocInCollection(collectionPath, id, {
+        appliedAmount: newApplied,
+        status: newStatus,
+        updatedAt: new Date()
+      });
+    }
+  }
+
+  // Applies the *change* in invoice allocations since the receipt was loaded (delta = new −
+  // original) to each sales invoice's totalDue/status. Fetches each invoice fresh by id rather
+  // than reading from outstandingInvoices, which excludes invoices this same receipt already paid
+  // off (status 'Paid' is filtered out of that list) and would otherwise be silently skipped here.
+  async function applyInvoiceBalanceDeltas(
+    currentAllocations: Array<{ invoiceId: string; amountPaid: number }>,
+    originalAllocations: Array<{ invoiceId: string; amountPaid: number }>
+  ) {
+    const invoiceIds = new Set([
+      ...currentAllocations.map(a => a.invoiceId),
+      ...originalAllocations.map(a => a.invoiceId)
+    ]);
+
+    await Promise.all(Array.from(invoiceIds).map(async (invoiceId) => {
+      const newPaid = currentAllocations.find(a => a.invoiceId === invoiceId)?.amountPaid || 0;
+      const oldPaid = originalAllocations.find(a => a.invoiceId === invoiceId)?.amountPaid || 0;
+      const delta = newPaid - oldPaid;
+      if (delta === 0) return;
+
+      try {
+        const invoiceDoc = await getDocFromCollection('transactions/customerCenter/salesInvoices', invoiceId) as any;
+        if (!invoiceDoc) return;
+        const currentBalance = Number(invoiceDoc.totalDue ?? 0);
+        const newBalance = Math.max(0, currentBalance - delta);
+        const newStatus = newBalance <= 0 ? 'Paid' : 'Partially Paid';
+        await updateDocInCollection('transactions/customerCenter/salesInvoices', invoiceId, {
+          totalDue: newBalance,
+          status: newStatus,
+          updatedAt: new Date()
+        });
+      } catch {}
+    }));
+  }
+
   // Save the payment receipt
   async function handleSave() {
     try {
@@ -625,130 +716,25 @@
       if (isCreateMode) {
         // Add new receipt
         docRef = await addDocToCollection('transactions/customerCenter/receipts', receiptData);
-        
+
         // Create journal entry
         const journalEntryId = await createReceiptJournalEntry({
           ...receiptData,
           id: docRef.id
         });
-        
-        // Update applied amounts and statuses on credit memos and advance payments
-        for (const credit of appliedCredits) {
-          if (credit.type === 'credit_memo') {
-            // Update credit memo applied amount and status
-            const creditMemoDoc = await getDocFromCollection('transactions/customerCenter/creditMemos', credit.id) as any;
-            if (creditMemoDoc) {
-              const currentApplied = creditMemoDoc.appliedAmount || 0;
-              const newApplied = currentApplied + credit.appliedAmount;
-              const totalAmount = creditMemoDoc.totalAmount || 0;
-              
-              // Determine new status based on applied amount
-              let newStatus = creditMemoDoc.status;
-              if (newApplied >= totalAmount) {
-                newStatus = 'Fully Applied';
-              } else if (newApplied > 0) {
-                newStatus = 'Partially Applied';
-              }
-              
-              await updateDocInCollection('transactions/customerCenter/creditMemos', credit.id, {
-                appliedAmount: newApplied,
-                status: newStatus,
-                updatedAt: new Date()
-              });
-            }
-          } else if (credit.type === 'advance_payment') {
-            // Update advance payment applied amount and status
-            const paymentDoc = await getDocFromCollection('transactions/customerCenter/receipts', credit.id) as any;
-            if (paymentDoc) {
-              const currentApplied = paymentDoc.appliedAmount || 0;
-              const newApplied = currentApplied + credit.appliedAmount;
-              const totalAmount = paymentDoc.amount || 0;
-              
-              // Determine new status based on applied amount
-              let newStatus = paymentDoc.status;
-              if (newApplied >= totalAmount) {
-                newStatus = 'Fully Applied';
-              } else if (newApplied > 0) {
-                newStatus = 'Partially Applied';
-              }
-              
-              await updateDocInCollection('transactions/customerCenter/receipts', credit.id, {
-                appliedAmount: newApplied,
-                status: newStatus,
-                updatedAt: new Date()
-              });
-            }
-          }
-        }
-        
-        // Update invoice statuses and balances to reflect payments
-        await Promise.all(
-          allocationArray.map(async (payment) => {
-            try {
-              const inv = (outstandingInvoices.find(i => i.value === payment.invoiceId));
-              const newBalance = Math.max(0, Number((inv?.payable ?? inv?.amount ?? 0) - payment.amountPaid));
-              const newStatus = newBalance <= 0 ? 'Paid' : 'Partially Paid';
-              await updateDocInCollection('transactions/customerCenter/salesInvoices', payment.invoiceId, {
-                totalDue: newBalance,
-                status: newStatus,
-                updatedAt: new Date()
-              });
-            } catch {}
-          })
-        );
+
+        // originalAppliedCredits/originalInvoicePayments are empty in create mode, so these
+        // deltas equal the full applied/allocated amounts — same effect as before, just unified
+        // with the edit-mode path below.
+        await applyCreditDeltas(appliedCredits, originalAppliedCredits);
+        await applyInvoiceBalanceDeltas(allocationArray, originalInvoicePayments);
       } else if (isEditMode && docId) {
         // Update existing receipt
         await updateDocInCollection('transactions/customerCenter/receipts', docId, receiptData);
-        
-        // Update applied amounts and statuses on credit memos and advance payments
-        for (const credit of appliedCredits) {
-          if (credit.type === 'credit_memo') {
-            // Update credit memo applied amount and status
-            const creditMemoDoc = await getDocFromCollection('transactions/customerCenter/creditMemos', credit.id) as any;
-            if (creditMemoDoc) {
-              const currentApplied = creditMemoDoc.appliedAmount || 0;
-              const newApplied = currentApplied + credit.appliedAmount;
-              const totalAmount = creditMemoDoc.totalAmount || 0;
-              
-              // Determine new status based on applied amount
-              let newStatus = creditMemoDoc.status;
-              if (newApplied >= totalAmount) {
-                newStatus = 'Fully Applied';
-              } else if (newApplied > 0) {
-                newStatus = 'Partially Applied';
-              }
-              
-              await updateDocInCollection('transactions/customerCenter/creditMemos', credit.id, {
-                appliedAmount: newApplied,
-                status: newStatus,
-                updatedAt: new Date()
-              });
-            }
-          } else if (credit.type === 'advance_payment') {
-            // Update advance payment applied amount and status
-            const paymentDoc = await getDocFromCollection('transactions/customerCenter/receipts', credit.id) as any;
-            if (paymentDoc) {
-              const currentApplied = paymentDoc.appliedAmount || 0;
-              const newApplied = currentApplied + credit.appliedAmount;
-              const totalAmount = paymentDoc.amount || 0;
-              
-              // Determine new status based on applied amount
-              let newStatus = paymentDoc.status;
-              if (newApplied >= totalAmount) {
-                newStatus = 'Fully Applied';
-              } else if (newApplied > 0) {
-                newStatus = 'Partially Applied';
-              }
-              
-              await updateDocInCollection('transactions/customerCenter/receipts', credit.id, {
-                appliedAmount: newApplied,
-                status: newStatus,
-                updatedAt: new Date()
-              });
-            }
-          }
-        }
-        
+
+        await applyCreditDeltas(appliedCredits, originalAppliedCredits);
+        await applyInvoiceBalanceDeltas(allocationArray, originalInvoicePayments);
+
         // Create/update journal entry for edit mode
         const journalEntryId = await createReceiptJournalEntry({
           ...receiptData,
@@ -786,11 +772,11 @@
 
 <FormLayout title={pageTitle} backPath="/customerCenter/receivePayment/list">
   <svelte:fragment slot="header-actions">
-    <div class="w-full sm:w-64">
-      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+    <div class="w-full sm:w-72 flex items-center gap-2">
+      <label for="field-memo" class="text-xs font-medium whitespace-nowrap" style="color: var(--color-neutral-600);">Memo</label>
       <textarea
         id="field-memo"
-        rows="2"
+        rows="1"
         class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
         style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
         placeholder="Add a memo"

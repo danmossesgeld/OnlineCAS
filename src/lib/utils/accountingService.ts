@@ -291,9 +291,18 @@ export async function createApvJournalEntry(apv: any): Promise<string | null> {
     const lines = [];
     let lineCounter = 1;
     
-    // Process each expense line
+    // Process each expense line. `item.price` is the pre-discount base amount; `item.amount`/
+    // `item.total` (saved by the form) is already net-of-discount. Debiting the expense at the
+    // gross `price` and crediting the per-line discount separately — rather than debiting the
+    // already-net `amount` and then applying the discount % to it a second time, which silently
+    // double-discounted every line with dsc>0 — is what keeps this entry balanced against the AP
+    // credit below, which is booked at totalAmountDue (netAmount + vat − lessWithholding).
     apv.lineItems.forEach((item: any) => {
-      // Expense entry - Debit
+      const price = item.price ?? item.amount ?? 0;
+      const lineDiscount = price * ((item.dsc || 0) / 100);
+      const lineNet = price - lineDiscount;
+
+      // Expense entry - Debit (gross, before line discount)
       lines.push({
         lineNo: lineCounter++,
         accountId: item.account,
@@ -304,37 +313,34 @@ export async function createApvJournalEntry(apv: any): Promise<string | null> {
         nameId: apv.supplier,
         nameName: apv.supplierName,
         lineDescription: item.description || `APV Line - ${apv.apvNo}`,
-        debit: item.amount - (item.amount * (item.dsc || 0) / 100),
+        debit: price,
         credit: 0
       });
-      
+
       // If there's a discount, add a credit entry for it
-      if (item.dsc && item.dsc > 0) {
-        const discountAmount = item.amount * (item.dsc / 100);
-        
+      if (lineDiscount > 0) {
         // Fetch a discount account from Chart of Accounts (could be stored in settings)
         const discountAccountId = item.discount_account_id || 'purchase-discounts';
-        
+
         lines.push({
           lineNo: lineCounter++,
           accountId: discountAccountId,
           accountName: item.discount_account_name || 'Purchase Discounts',
           lineDescription: `Discount - ${item.description || apv.apvNo}`,
           debit: 0,
-          credit: discountAmount
+          credit: lineDiscount
         });
       }
-      
-      // If there's VAT/Tax, add a debit entry for VAT Input Tax
+
+      // If there's VAT/Tax, add a debit entry for VAT Input Tax (computed on the net-of-discount amount)
       if (item.taxType && item.taxType !== '') {
         // Use the tax record for proper calculations and account linkage
         const taxRate = item.taxRate || 0.12; // Default to 12% if not specified
-        const taxableAmount = item.amount - (item.amount * (item.dsc || 0) / 100);
-        const taxAmount = taxableAmount * taxRate;
-        
+        const taxAmount = lineNet * taxRate;
+
         // Use the tax account from the tax type record if available
         const taxAccountId = item.tax_account_id || 'vat-input';
-        
+
         lines.push({
           lineNo: lineCounter++,
           accountId: taxAccountId,
@@ -345,8 +351,10 @@ export async function createApvJournalEntry(apv: any): Promise<string | null> {
         });
       }
     });
-    
-    // Add withholding tax entry if applicable
+
+    // Add withholding tax entry if applicable. apv.lessWithholding is now populated by the form
+    // (netAmount × withholding%, no longer hardcoded to 0) and apv.totalAmountDue already has it
+    // subtracted, so this credit nets correctly against the AP credit below.
     if (apv.withholdingTax && parseFloat(apv.withholdingTax) > 0) {
       const withholdingRate = parseFloat(apv.withholdingTax) / 100;
       const withholdingAmount = apv.lessWithholding || (apv.netAmount * withholdingRate);
@@ -377,12 +385,18 @@ export async function createApvJournalEntry(apv: any): Promise<string | null> {
       credit: apv.totalAmountDue
     });
     
-    // Create the complete journal entry with lines
+    // Create the complete journal entry with lines. totalDebit/totalCredit reflect the actual
+    // line sums (not just totalAmountDue) so they stay accurate now that per-line discount/VAT
+    // lines can make total debits/credits exceed totalAmountDue.
+    const linesTotalDebit = lines.reduce((sum, l) => sum + (l.debit || 0), 0);
+    const linesTotalCredit = lines.reduce((sum, l) => sum + (l.credit || 0), 0);
     const journalEntry = {
       ...journalEntryData,
+      totalDebit: linesTotalDebit,
+      totalCredit: linesTotalCredit,
       lines
     };
-    
+
     // Check if a journal entry already exists for this APV
     const existingEntries = await getJournalEntriesForSource('apv', apv.id);
     
@@ -869,8 +883,11 @@ export async function createCreditMemoJournalEntry(creditMemo: any): Promise<str
     // Accounts (could be settings-driven in the future)
     const salesAccountId = 'sales-revenue';
     const salesAccountName = 'Sales Revenue';
-    const vatPayableAccountId = 'vat-payable';
-    const vatPayableAccountName = 'VAT Payable';
+    // Same account id/name createSalesInvoiceJournalEntry credits Output VAT to, so a credit
+    // memo actually nets against the liability balance the original invoice posted (previously
+    // this used a separate 'vat-payable' account, which never reconciled against 'output-vat').
+    const vatPayableAccountId = 'output-vat';
+    const vatPayableAccountName = 'Output VAT';
     const arAccountId = 'accounts-receivable';
     const arAccountName = 'Accounts Receivable';
     const whtReceivableAccountId = 'withholding-tax-receivable';
@@ -1098,10 +1115,19 @@ export async function createReceivingReportJournalEntry(receivingReport: any): P
       });
     }
     
+    // Check if a journal entry already exists for this receiving report — without this, editing
+    // and re-saving an already-Posted RR (status stays 'Posted' on every update) posted a brand
+    // new journal entry each time, duplicating Inventory/AP by the same amount on every re-save.
+    const existingEntries = await getJournalEntriesForSource('receivingReport', receivingReport.id);
+    if (existingEntries && existingEntries.length > 0) {
+      console.log('Journal entry already exists for this receiving report');
+      return existingEntries[0].id;
+    }
+
     // Save the journal entry to Firestore
     const docRef = await addDocToCollection('accounting', 'journalEntries', { ...journalEntryData, lines });
     const journalEntryId = docRef.id;
-    
+
     // Update the receiving report with the journal entry ID reference
     if (journalEntryId && receivingReport.id) {
       await updateDocInCollection('vendorCenter/receivingReports', String(receivingReport.id), {

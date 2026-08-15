@@ -513,11 +513,11 @@
 
 <FormLayout title={pageTitle} backPath="/accounting/generalJournal/list">
   <svelte:fragment slot="header-actions">
-    <div class="w-full sm:w-64">
-      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+    <div class="w-full sm:w-72 flex items-center gap-2">
+      <label for="field-memo" class="text-xs font-medium whitespace-nowrap" style="color: var(--color-neutral-600);">Memo</label>
       <textarea
         id="field-memo"
-        rows="2"
+        rows="1"
         class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
         style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
         placeholder="Add a memo"

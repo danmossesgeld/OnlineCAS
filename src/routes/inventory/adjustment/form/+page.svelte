@@ -5,6 +5,7 @@
   import FormFooter from '$lib/components/FormFooter.svelte';
   import { onMount } from 'svelte';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
+  import { resolveItemAutofill } from '$lib/utils/itemAutofill';
   import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
   import { createInventoryAdjustmentJournalEntry } from '$lib/utils/accountingService';
   import { goto } from '$app/navigation';
@@ -46,7 +47,7 @@
   // anywhere else in the app, making this form unsubmittable. "Locations" is the real,
   // managed warehouse-equivalent list, and the Chart of Accounts lives under masterlist/accounts.
   createFirestoreOptionsStore('otherlist/locations', 'name', 'id').subscribe(opts => warehouseOptions = opts);
-  createFirestoreOptionsStore('items', 'name', 'id').subscribe(opts => itemOptions = opts);
+  createFirestoreOptionsStore('items', 'name', 'id', true).subscribe(opts => itemOptions = opts);
   createFirestoreOptionsStore('units').subscribe(opts => unitOptions = opts);
   createFirestoreOptionsStore('masterlist/accounts', 'name', 'id').subscribe(opts => accountOptions = opts);
 
@@ -231,10 +232,25 @@
     if (lineItems[idx]) {
         (lineItems[idx] as Record<string, any>)[key] = value;
         const item = lineItems[idx];
-        
+
+        // Autofill linked fields when an item is selected — see itemAutofill.ts. This form
+        // never had this before; adding it for consistency with Sales Invoice/Credit
+        // Memo/Receiving Report, which all auto-fill from the same masterlist/items record.
+        // unit uses the id (this form's Unit column is a <select> against otherlist/units,
+        // resolved to a display name at save time — see getUnitName below), and price
+        // defaults to purchase_price (this form values inventory at cost, not sales price;
+        // the column is literally labeled "Unit Cost").
+        if (key === 'item') {
+          const selected = itemOptions.find(i => i.value === value);
+          const fields = resolveItemAutofill(selected);
+          item.description = fields.description;
+          if (fields.unitId) item.unit = fields.unitId;
+          item.price = fields.purchasePrice;
+        }
+
         // Calculate amount as qty * price (no discount for inventory adjustments)
         item.amount = +((item.qty || 0) * (item.price || 0)).toFixed(2);
-        
+
         // Reassign the array to trigger reactivity
         lineItems = [...lineItems];
     }

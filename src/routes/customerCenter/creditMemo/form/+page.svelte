@@ -12,6 +12,8 @@
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
   import { createCreditMemoJournalEntry } from '$lib/utils/accountingService';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
+  import { resolveItemAutofill } from '$lib/utils/itemAutofill';
+  import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
   import { createFormModeStore } from '$lib/stores/formModeStore';
   import TxnFields from '$lib/components/TxnFields.svelte';
   import FormFooter from '$lib/components/FormFooter.svelte';
@@ -181,6 +183,22 @@
       if (!formData.items || formData.items.length === 0) {
         addItem();
       }
+
+      // A memo saved after the discount-shape fix below stores `discount` as a resolved numeric
+      // percent (matching Sales Invoice's `dsc` convention) rather than the raw discount-option id
+      // this table's <select> is bound to — remap it back so the dropdown shows the right
+      // selection instead of appearing blank. The reactive block further down re-runs this once
+      // discountOptions finishes loading, in case it hasn't arrived yet at this point.
+      if (formData.items && discountOptions.length > 1) {
+        formData.items = formData.items.map((item: any) => {
+          if (typeof item.discount !== 'number') return item;
+          const match = discountOptions.find((opt: any) => {
+            const m = opt.label?.match(/(\d+(?:\.\d+)?)%?/);
+            return m ? parseFloat(m[1]) === item.discount : false;
+          });
+          return match ? { ...item, discount: match.value } : item;
+        });
+      }
       
       // If we have a customer ID but no customer name, try to resolve it from options
       if (formData.customer && !formData.customerName && customerOptions.length > 0) {
@@ -238,20 +256,17 @@
     calculateTotals();
   }
 
-  // Handle item selection
+  // Handle item selection — see itemAutofill.ts for why the field lookup is centralized
+  // rather than re-derived here.
   function handleItemChange(index: number, itemId: string) {
     const selected = itemOptions.find(item => item.value === itemId);
     if (!selected) return;
-    const raw: any = (selected as any).raw || {};
+    const fields = resolveItemAutofill(selected);
     const line = formData.items[index];
     line.itemId = selected.value;
-    // Always update description from selected item
-    line.description = raw.description ?? '';
-    // Always update unit: prefer unit_id, fallback to unitId/unit
-    line.unit = raw.unit_id ?? raw.unitId ?? raw.unit ?? '';
-    // Always update price: prefer sales_price, fallback to price
-    const resolvedPrice = (typeof raw.sales_price === 'number' ? raw.sales_price : undefined) ?? (typeof raw.price === 'number' ? raw.price : undefined);
-    if (resolvedPrice !== undefined) line.unitPrice = resolvedPrice;
+    line.description = fields.description;
+    if (fields.unitId) line.unit = fields.unitId;
+    line.unitPrice = fields.salesPrice;
     calculateLineTotal(index);
     // Trigger table re-render
     formData.items = [...formData.items];
@@ -349,6 +364,22 @@
   $: formData.taxAmount = vat;
   $: formData.totalAmount = totalDue;
   
+  // Same remap as in loadCreditMemo, re-run reactively in case discountOptions was still empty
+  // (Firestore subscription hadn't resolved yet) at the moment the document actually loaded.
+  $: if (formData.items && formData.items.length > 0 && discountOptions && discountOptions.length > 1) {
+    const needsRemap = formData.items.some((item: any) => typeof item.discount === 'number');
+    if (needsRemap) {
+      formData.items = formData.items.map((item: any) => {
+        if (typeof item.discount !== 'number') return item;
+        const match = discountOptions.find((opt: any) => {
+          const m = opt.label?.match(/(\d+(?:\.\d+)?)%?/);
+          return m ? parseFloat(m[1]) === item.discount : false;
+        });
+        return match ? { ...item, discount: match.value } : item;
+      });
+    }
+  }
+
   // Reactive statement to resolve customer name when options load
   $: if (formData.customer && !formData.customerName && customerOptions.length > 0) {
     const customerOption = customerOptions.find(c => c.value === formData.customer);
@@ -387,9 +418,19 @@
       // Force Posted status when saving via primary button
       const desiredStatus = 'Posted';
       formData.status = desiredStatus;
+
+      // Save the resolved numeric discount percent, not the option id — matching Sales Invoice's
+      // `dsc` convention (getDiscountPercent there / getDiscountPercentFromOptionId here), so both
+      // transaction types store the same shape for what's conceptually the same field.
+      const preparedItems = formData.items.map((item: any) => ({
+        ...item,
+        discount: getDiscountPercentFromOptionId(item.discount)
+      }));
+
       // Prepare data for save
       const creditMemoData = {
         ...formData,
+        items: preparedItems,
         status: desiredStatus,
         updatedAt: new Date()
       };
@@ -467,11 +508,11 @@
 
 <FormLayout title={pageTitle} backPath="/customerCenter/creditMemo/list">
   <svelte:fragment slot="header-actions">
-    <div class="w-full sm:w-64">
-      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+    <div class="w-full sm:w-72 flex items-center gap-2">
+      <label for="field-memo" class="text-xs font-medium whitespace-nowrap" style="color: var(--color-neutral-600);">Memo</label>
       <textarea
         id="field-memo"
-        rows="2"
+        rows="1"
         class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
         style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
         placeholder="Add a memo"
@@ -530,7 +571,7 @@
         lessWithholding={lessWithholding}
         totalDue={totalDue}
         bind:withholdingTax={formData.withholdingTax}
-        withholdingTaxOptions={[{label:'Select Withholding Tax', value:''},{label:'1%', value:'1'},{label:'2%', value:'2'}]}
+        withholdingTaxOptions={WITHHOLDING_TAX_OPTIONS}
         withholdingLabel={`Less: Withholding Tax${formData.withholdingTax ? ` (${formData.withholdingTax}%)` : ''}`}
         totalLabel="Total Amount"
     />

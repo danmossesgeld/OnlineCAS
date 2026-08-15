@@ -4,6 +4,7 @@
   import { addDocToCollection, updateDocInCollection, deleteDocFromCollection } from '$lib/utils/firestoreCrud';
   import { categoryOptions, unitOptions } from '$lib/utils/optionStores';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
+  import { filterAccountsByType } from '$lib/utils/accountFilters';
   import { parseCSVToRecords } from '$lib/utils/csvParser';
   import { exportNestedFirestoreCollectionToCSV, type ExportColumn } from '$lib/utils/csvExporter';
   import { onMount } from 'svelte';
@@ -13,18 +14,11 @@
   // Get accounts for select fields filtered by type
   const accountsStore = createFirestoreOptionsStore('masterlist/accounts', 'name', 'id', true);
   
-  // Derived stores for filtered account types
-  $: incomeAccounts = $accountsStore.filter(acc => acc.raw?.accountType === 'revenue')
-    .map(acc => ({ label: `${acc.raw?.code || ''} - ${acc.label}`, value: acc.value }));
-  
-  $: expenseAccounts = $accountsStore.filter(acc => acc.raw?.accountType === 'expense')
-    .map(acc => ({ label: `${acc.raw?.code || ''} - ${acc.label}`, value: acc.value }));
-
-  $: inventoryAccounts = $accountsStore.filter(acc => acc.raw?.accountType === 'asset')
-    .map(acc => ({ label: `${acc.raw?.code || ''} - ${acc.label}`, value: acc.value }));
-
-  $: cogsAccounts = $accountsStore.filter(acc => acc.raw?.accountType === 'cogs' || acc.raw?.accountType === 'expense')
-    .map(acc => ({ label: `${acc.raw?.code || ''} - ${acc.label}`, value: acc.value }));
+  // Derived stores for filtered account types — see accountFilters.ts
+  $: incomeAccounts = filterAccountsByType($accountsStore, 'revenue');
+  $: expenseAccounts = filterAccountsByType($accountsStore, 'expense');
+  $: inventoryAccounts = filterAccountsByType($accountsStore, 'asset');
+  $: cogsAccounts = filterAccountsByType($accountsStore, ['cogs', 'expense']);
 
   onMount(() => {
     // Mark as loaded when component is mounted

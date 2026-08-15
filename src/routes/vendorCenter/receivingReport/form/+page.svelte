@@ -15,6 +15,7 @@
   import { formatCurrency, formatDate } from '$lib/utils/formatters';
   import { createReceivingReportJournalEntry } from '$lib/utils/accountingService';
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
+  import { resolveItemAutofill } from '$lib/utils/itemAutofill';
   import { createFormModeStore } from '$lib/stores/formModeStore';
   
   // Use the reusable form mode store for handling URL parameters and mode detection
@@ -36,17 +37,20 @@
 
   // Get options from the Firestore options store with proper type definitions
   let vendorOptions: {label: string, value: string}[] = [];
-  let itemOptions: {label: string, value: string, description?: string, unit?: string, unitCost?: number}[] = [];
+  let itemOptions: {label: string, value: string, raw?: any}[] = [];
   let locationOptions: {label: string, value: string}[] = [];
 
-  // Initialize subscription to Firestore options with createFirestoreOptionsStore
+  // Initialize subscription to Firestore options with createFirestoreOptionsStore. items needs
+  // includeRawData:true (the 4th arg) so updateItem's auto-fill below has description/unit/cost
+  // to read — without it every option here only ever carries {label, value}.
   createFirestoreOptionsStore('vendors', 'name', 'id').subscribe(opts => vendorOptions = opts);
-  createFirestoreOptionsStore('items', 'name', 'id').subscribe(opts => itemOptions = opts);
+  createFirestoreOptionsStore('items', 'name', 'id', true).subscribe(opts => itemOptions = opts);
   createFirestoreOptionsStore('locations').subscribe(opts => locationOptions = opts);
 
   // Form data interface
   interface ReceivingReportItem {
     id: string;
+    itemName: string;
     description: string;
     quantity: number;
     unit: string;
@@ -74,7 +78,7 @@
     createdAt: Date;
     updatedAt: Date;
   }
-  
+
   // Form state with proper type definition
   let formData: ReceivingReportData = {
     rrNo: '',
@@ -131,9 +135,17 @@
     { label: 'PO No', name: 'poNo', type: 'text' }
   ];
   
-  // Define columns for the line items table
-  const columns = [
-    { label: 'Item', key: 'id', type: 'select', options: itemOptions, width: '25%' },
+  // Define columns for the line items table. Must be reactive ($:), not a plain const — itemOptions
+  // starts as [] and is only populated asynchronously once the Firestore subscription above
+  // resolves; a const here would capture that initial empty array by value and the Item dropdown
+  // would stay empty forever, since reassigning the itemOptions variable later doesn't retroactively
+  // update an object literal that already copied its old reference.
+  $: columns = [
+    // displayField tells TxnItemTable what to show in read-only/view mode instead of the raw
+    // value — without it, viewing a saved RR showed the item's bare Firestore doc id (row.id)
+    // in this column instead of its name, since TxnItemTable's built-in fallback only special-
+    // cases a column literally keyed 'item', not 'id'.
+    { label: 'Item', key: 'id', type: 'select', options: itemOptions, displayField: 'itemName', width: '25%' },
     { label: 'Description', key: 'description', type: 'text', width: '25%' },
     { label: 'Quantity', key: 'quantity', type: 'number', width: '10%' },
     { label: 'Unit', key: 'unit', type: 'text', width: '10%' },
@@ -198,6 +210,7 @@
   function addItem() {
     formData.items = [...formData.items, {
       id: '',
+      itemName: '',
       description: '',
       quantity: 1,
       unit: '',
@@ -225,33 +238,52 @@
       // Type assertion to allow dynamic property access
       (formData.items[index] as any)[key] = value;
       
-      // If item ID is updated, handle related field updates
+      // If item ID is updated, auto-fill the linked fields via the shared resolver (see
+      // itemAutofill.ts for why this is centralized).
       if (key === 'id') {
         const selectedItem = itemOptions.find(item => item.value === value);
-        if (selectedItem) {
-          formData.items[index].description = selectedItem.description || '';
-          formData.items[index].unit = selectedItem.unit || '';
-          formData.items[index].unitCost = selectedItem.unitCost || 0;
-        }
-      } 
+        const fields = resolveItemAutofill(selectedItem);
+        formData.items[index].itemName = fields.itemName;
+        formData.items[index].description = fields.description;
+        formData.items[index].unit = fields.unitName; // plain display text, not an id — RR's Unit column is free text, not a <select>
+        formData.items[index].unitCost = fields.purchasePrice; // receiving goods = what it costs us, not sales_price
+        // Selecting an item changes unitCost, so the line's amount needs recalculating too —
+        // otherwise it stays at whatever it was (usually 0) until quantity/unitCost is touched
+        // separately.
+        calculateLineTotal(index);
+      }
       // If quantity or unitCost changes, recalculate totals
       else if (key === 'quantity' || key === 'unitCost') {
         calculateLineTotal(index);
       }
+
+      // Reassign the array to trigger reactivity. formData.items[index].foo = x above mutates
+      // the existing array/object in place — the *reference* passed down through
+      // FormSection -> TxnItemTable as the `items`/`rows` prop never changes, so Svelte's
+      // prop-diffing at each component boundary sees "same array" and never re-renders the
+      // table. This was the actual bug: the auto-fill values above were being computed
+      // correctly all along, they just never reached the DOM without this line. Sales
+      // Invoice's and Credit Memo's equivalent handlers already do this; this one didn't.
+      formData.items = [...formData.items];
     }
   }
 
   function calculateTotals() {
     // Calculate subtotal
     formData.subtotal = formData.items.reduce(
-      (sum, item) => sum + (Number(item.amount) || 0), 
+      (sum, item) => sum + (Number(item.amount) || 0),
       0
     );
-    
+
     // Calculate tax amount
     formData.taxAmount = formData.subtotal * (formData.taxRate / 100);
-    
-    // Calculate total amount
+
+    // Calculate total amount. No withholding tax here — createReceivingReportJournalEntry has
+    // no withholding logic at all (unlike Sales Invoice/APV/Credit Memo, which do), because a
+    // Receiving Report is a goods-receipt document, not a bill/invoice; withholding is applied
+    // where the actual payable obligation is recognized (APV), not here. See FormFooter's
+    // showWithholding prop, set to false below, for why the withholding UI doesn't render on
+    // this form at all rather than rendering a deduction with no accounting effect.
     formData.totalAmount = formData.subtotal + formData.taxAmount;
   }
 
@@ -340,11 +372,11 @@
 
 <FormLayout title={pageTitle} backPath="/vendorCenter/receivingReport/list">
   <svelte:fragment slot="header-actions">
-    <div class="w-full sm:w-64">
-      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+    <div class="w-full sm:w-72 flex items-center gap-2">
+      <label for="field-memo" class="text-xs font-medium whitespace-nowrap" style="color: var(--color-neutral-600);">Memo</label>
       <textarea
         id="field-memo"
-        rows="2"
+        rows="1"
         class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
         style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
         placeholder="Add a memo"
@@ -405,6 +437,7 @@
       grossAmount={formData.subtotal}
       vatRate={formData.taxRate / 100}
       vat={formData.taxAmount}
+      showWithholding={false}
       totalDue={formData.totalAmount}
     />
   {/if}

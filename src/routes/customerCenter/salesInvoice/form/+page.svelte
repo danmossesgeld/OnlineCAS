@@ -8,6 +8,8 @@
   import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
   import { createSalesInvoiceJournalEntry } from '$lib/utils/accountingService';
+  import { resolveItemAutofill } from '$lib/utils/itemAutofill';
+  import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
   import { goto } from '$app/navigation';
   
   // Use the reusable form mode store for handling URL parameters and mode detection
@@ -55,11 +57,7 @@
     discountOptions = [{ label: 'N/A', value: '' }, ...opts];
   });
 
-  const withholdingTaxOptions = [
-    { label: 'Select Withholding Tax', value: '' },
-    { label: '1%', value: '1' },
-    { label: '2%', value: '2' }
-  ];
+  const withholdingTaxOptions = WITHHOLDING_TAX_OPTIONS;
 
   // Define the type for our form data to include all fields we need
   type FormDataType = {
@@ -399,23 +397,19 @@
         // Update the item property
         (item as Record<string, any>)[key] = value;
         
-        // Autofill linked fields when an item is selected
+        // Autofill linked fields when an item is selected — see itemAutofill.ts for why this
+        // is centralized rather than re-deriving the raw.xxx fallback chain here. unit/taxType
+        // stay guarded (only overwritten if the item actually specifies one) so switching to an
+        // item with no unit/tax data doesn't wipe out a value the user already set; price is
+        // unconditional since leaving a stale price from the *previous* item selected would be
+        // actively wrong.
         if (key === 'item') {
           const selected = itemOptions.find(o => String(o.value) === String(value));
-          const raw: any = (selected as any)?.raw || {};
-          if (raw) {
-            // Always update description from selected item
-            item.description = raw.description ?? '';
-            // Always update unit: prefer unit_id, fallback to unitId/unit
-            const resolvedUnitId = raw.unit_id ?? raw.unitId ?? raw.unit ?? '';
-            if (resolvedUnitId) item.unit = resolvedUnitId;
-            // Always update tax type if present on item
-            const resolvedTaxType = raw.tax_type_id ?? raw.taxType ?? '';
-            if (resolvedTaxType !== undefined) item.taxType = resolvedTaxType;
-            // Always update price: prefer sales_price, fallback to price
-            const resolvedPrice = (typeof raw.sales_price === 'number' ? raw.sales_price : undefined) ?? (typeof raw.price === 'number' ? raw.price : undefined);
-            if (resolvedPrice !== undefined) item.price = formatNumber(resolvedPrice);
-          }
+          const fields = resolveItemAutofill(selected);
+          item.description = fields.description;
+          if (fields.unitId) item.unit = fields.unitId;
+          if (fields.taxType) item.taxType = fields.taxType;
+          item.price = formatNumber(fields.salesPrice);
         }
         
         // Recalculate amount if price, qty, or discount changes
@@ -642,11 +636,11 @@
 
 <FormLayout title={pageTitle} backPath="/customerCenter/salesInvoice/list">
   <svelte:fragment slot="header-actions">
-    <div class="w-full sm:w-64">
-      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+    <div class="w-full sm:w-72 flex items-center gap-2">
+      <label for="field-memo" class="text-xs font-medium whitespace-nowrap" style="color: var(--color-neutral-600);">Memo</label>
       <textarea
         id="field-memo"
-        rows="2"
+        rows="1"
         class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
         style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
         placeholder="Add a memo"

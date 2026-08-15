@@ -8,6 +8,8 @@
   import { addDocToCollection, updateDocInCollection, getDocFromCollection } from '$lib/utils/firestoreCrud';
   import { generateNextDocumentId, DocumentType } from '$lib/utils/documentIdService';
   import { createApvJournalEntry } from '$lib/utils/accountingService';
+  import { filterAccountsByType } from '$lib/utils/accountFilters';
+  import { WITHHOLDING_TAX_OPTIONS } from '$lib/utils/withholdingTax';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   
@@ -42,21 +44,24 @@
   // Get all accounts with raw data to filter by type
   const accountsStore = createFirestoreOptionsStore('masterlist/accounts', 'name', 'id', true);
   
-  // Filter AP accounts (liability type accounts for AP)
-  $: accountOptions = $accountsStore
-    .filter(acc => acc.raw?.accountType === 'liability')
-    .map(acc => ({ 
-      label: `${acc.raw?.code || ''} - ${acc.label}`, 
-      value: acc.value 
-    }));
-  
+  // Filter AP accounts (liability type accounts for AP) — see accountFilters.ts. Matches by
+  // broad category, so accounts typed with the standard granular values (Accounts Payable,
+  // Credit Card, Other Current Liability, ...) match 'liability' correctly, not just the old
+  // literal 'liability' value.
+  $: accountOptions = filterAccountsByType($accountsStore, 'liability', 'No liability accounts found — add one in Chart of Accounts');
+
   // Filter expense accounts for line items
-  $: expenseAccountOptions = $accountsStore
-    .filter(acc => acc.raw?.accountType === 'expense')
-    .map(acc => ({ 
-      label: `${acc.raw?.code || ''} - ${acc.label}`, 
-      value: acc.value 
-    }));
+  $: expenseAccountOptions = filterAccountsByType($accountsStore, 'expense', 'No expense accounts found — add one in Chart of Accounts');
+
+  // Diagnostic only, shown inline below when either dropdown above is empty (see template) —
+  // if this keeps happening after the accountType-filtering fixes, the fastest way to tell "no
+  // matching accounts exist yet" apart from "something's still broken" is to see exactly what
+  // accountType values are actually loaded, rather than guess again.
+  $: accountTypeCounts = $accountsStore.reduce((counts: Record<string, number>, acc) => {
+    const t = String(acc.raw?.accountType || '(none)');
+    counts[t] = (counts[t] || 0) + 1;
+    return counts;
+  }, {});
 
   // Other options (using correct paths for Firestore)
   createFirestoreOptionsStore('masterlist/vendors', 'name', 'id').subscribe(opts => supplierOptions = opts);
@@ -65,11 +70,7 @@
   createFirestoreOptionsStore('otherlist/costcenters').subscribe(opts => costCenterOptions = opts);
   createFirestoreOptionsStore('otherlist/tax', 'name', 'id').subscribe(opts => taxTypeOptions = opts);
 
-  const withholdingTaxOptions = [
-    { label: 'Select Withholding Tax', value: '' },
-    { label: '1%', value: '1' },
-    { label: '2%', value: '2' }
-  ];
+  const withholdingTaxOptions = WITHHOLDING_TAX_OPTIONS;
 
   // Define the type for our form data to include all fields we need
   type FormDataType = {
@@ -323,9 +324,17 @@
   $: grossAmount = lineItems.reduce((sum, i) => sum + (i.price || 0), 0);
   $: discount = lineItems.reduce((sum, i) => sum + (((i.price || 0) * (i.dsc || 0)) / 100), 0);
   $: netAmount = grossAmount - discount;
-  $: vat = 0;
-  $: lessWithholding = 0;
-  $: totalAmountDue = netAmount - lessWithholding;
+  // Lines with a tax type selected are treated as vatable at a flat 12%, computed on the
+  // net-of-line-discount amount — this must match createApvJournalEntry's per-line VAT math
+  // (accountingService.ts) so what's saved here is exactly what the journal entry posts.
+  $: vatableSales = lineItems
+    .filter((i) => i.taxType)
+    .reduce((sum, i) => sum + (i.price || 0) * (1 - (i.dsc || 0) / 100), 0);
+  $: vat = vatableSales * 0.12;
+  // Withholding is computed on net purchase amount (before VAT), matching FormFooter's own
+  // display convention — kept in sync here so the saved value equals what's shown on screen.
+  $: lessWithholding = formData.withholdingTax ? netAmount * (parseFloat(formData.withholdingTax) / 100) : 0;
+  $: totalAmountDue = netAmount + vat - lessWithholding;
 
   /**
    * Save the APV data to Firestore
@@ -491,24 +500,15 @@
     { label: 'Tax Type', key: 'taxType', type: 'select', options: taxTypeOptions, width: '12%' },
     { label: 'Total', key: 'total', width: '10%' }
   ];
-
-  const summary = {
-    'Gross Amount': grossAmount,
-    'Discount': discount,
-    'Net Amount': netAmount,
-    'VAT': vat,
-    'Less: Withholding Tax': lessWithholding,
-    'Total Amount Due': totalAmountDue
-  };
 </script>
 
 <FormLayout title={pageTitle} backPath="/vendorCenter/apv/list">
   <svelte:fragment slot="header-actions">
-    <div class="w-full sm:w-64">
-      <label for="field-memo" class="block mb-0.5 text-xs font-medium text-right" style="color: var(--color-neutral-600);">Memo</label>
+    <div class="w-full sm:w-72 flex items-center gap-2">
+      <label for="field-memo" class="text-xs font-medium whitespace-nowrap" style="color: var(--color-neutral-600);">Memo</label>
       <textarea
         id="field-memo"
-        rows="2"
+        rows="1"
         class="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors resize-none"
         style="background: {isViewMode ? 'var(--color-neutral-50)' : 'var(--color-neutral-0)'}; border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
         placeholder="Add a memo"
@@ -522,7 +522,21 @@
   <FormSection withSeparator={false}>
     <TxnFields {fields} bind:formData disabled={isViewMode} />
   </FormSection>
-  
+
+  <!-- accountOptions/expenseAccountOptions always have at least one entry now (the emptyLabel
+       placeholder from filterAccountsByType when nothing real matches), so "empty" here means
+       "only that placeholder" — real options always carry a non-empty Firestore doc id value. -->
+  {#if !isViewMode && (!accountOptions.some(o => o.value) || !expenseAccountOptions.some(o => o.value))}
+    <div class="mb-4 px-3 py-2 rounded-md text-xs" style="background: var(--color-warning-50); color: var(--color-warning-700); border: 1px solid var(--color-warning-200);">
+      <strong>{!accountOptions.some(o => o.value) ? 'No liability' : 'No expense'} accounts found in Chart of Accounts.</strong>
+      {#if Object.keys(accountTypeCounts).length > 0}
+        Account types currently loaded: {Object.entries(accountTypeCounts).map(([t, n]) => `${t} (${n})`).join(', ')}.
+      {:else}
+        No accounts loaded at all — check Masterlist &gt; Chart of Accounts.
+      {/if}
+    </div>
+  {/if}
+
   <!-- Line Items section -->
   <FormSection
     title="Expense Items"
@@ -556,5 +570,12 @@
     bind:withholdingTax={formData.withholdingTax}
     {withholdingTaxOptions}
     readOnly={isViewMode}
+    grossAmount={grossAmount}
+    discount={discount}
+    netSales={netAmount}
+    vat={vat}
+    vatableSales={vatableSales}
+    lessWithholding={lessWithholding}
+    totalDue={totalAmountDue}
   />
 </FormLayout>

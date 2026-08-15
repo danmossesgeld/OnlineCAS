@@ -15,6 +15,13 @@
   export let summaryMode: 'custom' | 'transaction' | 'none' = 'custom';
   
   // Transaction summary properties (only used when summaryMode is 'transaction')
+  // Not every transaction type has withholding tax in the accounting system — Receiving Report
+  // never did (see accountingService.ts's createReceivingReportJournalEntry, which has no
+  // withholding logic at all), unlike Sales Invoice/APV/Credit Memo which do. Defaults to true
+  // so existing callers that DO have withholding keep working unchanged; forms without it should
+  // pass showWithholding={false} rather than just omitting the other withholding props, which
+  // used to leave a "Withholding Tax:" dropdown with zero options rendered on screen.
+  export let showWithholding: boolean = true;
   export let lineItems: Array<{
     item: string;
     description: string;
@@ -107,20 +114,22 @@
     <div class="w-full xl:w-auto xl:ml-auto order-2">
       {#if summaryMode === 'transaction'}
         <div class="text-sm w-full xl:max-w-md xl:ml-auto">
-          <div class="flex items-center justify-end gap-1.5 mb-2 text-xs">
-            <label for="withholding-tax" style="color: var(--color-neutral-500);">Withholding Tax:</label>
-            <select
-              id="withholding-tax"
-              class="rounded border px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 transition-colors"
-              style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
-              bind:value={withholdingTax}
-              disabled={readOnly}
-            >
-              {#each withholdingTaxOptions as opt}
-                <option value={opt.value}>{opt.label}</option>
-              {/each}
-            </select>
-          </div>
+          {#if showWithholding}
+            <div class="flex items-center justify-end gap-1.5 mb-2 text-xs">
+              <label for="withholding-tax" style="color: var(--color-neutral-500);">Withholding Tax:</label>
+              <select
+                id="withholding-tax"
+                class="rounded border px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 transition-colors"
+                style="background: var(--color-neutral-0); border-color: var(--color-neutral-200); color: var(--color-neutral-700); --tw-ring-color: var(--color-primary-300);"
+                bind:value={withholdingTax}
+                disabled={readOnly}
+              >
+                {#each withholdingTaxOptions as opt}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </div>
+          {/if}
 
           <!-- Two-column figures, right-aligned, no container box -->
           <div class="flex justify-end gap-6">
@@ -155,10 +164,12 @@
                 <span style="color: var(--color-neutral-500);">VAT-Exempt</span>
                 <span class="font-medium" style="color: var(--color-neutral-800);">₱{exempt.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
-              <div class="flex justify-between gap-3">
-                <span style="color: var(--color-neutral-500);">{withholdingLabel}</span>
-                <span class="font-medium" style="color: var(--color-error-600);">-₱{withhold.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-              </div>
+              {#if showWithholding}
+                <div class="flex justify-between gap-3">
+                  <span style="color: var(--color-neutral-500);">{withholdingLabel}</span>
+                  <span class="font-medium" style="color: var(--color-error-600);">-₱{withhold.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                </div>
+              {/if}
             </div>
           </div>
 

@@ -203,6 +203,19 @@ body {
   transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
+/* Every <select> throughout the app sets its own background/color via inline styles (there's
+   no shared select component), which styles the closed box correctly but does not reliably
+   cascade into the native <option> popup across browsers — color-scheme:dark (set above, under
+   :root.dark) is only a hint and gets overridden once a select has explicit author styling. The
+   result in dark mode: the popup list falls back to a white background while still inheriting
+   the light text color meant for dark surfaces, i.e. unreadable light-on-white. background-color
+   and color are the only two properties reliably stylable on <option> in any browser — this
+   covers every select in the app in one place rather than fixing each one's inline styles. */
+select option {
+  background-color: var(--color-neutral-0);
+  color: var(--color-neutral-700);
+}
+
 /* ===== UTILITY CLASSES ===== */
 .text-gradient {
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));

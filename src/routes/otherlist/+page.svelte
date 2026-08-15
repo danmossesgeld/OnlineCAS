@@ -33,5 +33,9 @@
       <iconify-icon icon="material-symbols:percent-rounded" width="28" height="28" />
       Tax
     </a>
+    <a href="/otherlist/costcenters" class="btn btn-outline flex items-center gap-3 text-lg justify-start">
+      <iconify-icon icon="material-symbols:account-tree-rounded" width="28" height="28" />
+      Cost Centers
+    </a>
   </div>
 </div> 

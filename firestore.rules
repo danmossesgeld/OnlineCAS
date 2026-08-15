@@ -1,19 +1,113 @@
 rules_version = '2';
 
+// NOTE FOR WHOEVER DEPLOYS THIS: the version of this file previously committed here was the
+// default Firebase test-mode placeholder (`allow read, write: if request.time < ...`, expired
+// 2025-06-22) and had not been touched since the initial commit — whatever rules are actually
+// live in production today were changed directly in the Firebase Console, bypassing this repo
+// entirely, and are NOT necessarily what this file describes. Review this against whatever is
+// currently deployed (Firebase Console > Firestore > Rules, or `firebase firestore:rules get`)
+// before running `firebase deploy --only firestore:rules` — don't deploy blind.
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2025, 6, 22);
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // The one hardcoded bootstrap identity in the system — mirrors DEFAULT_ADMIN_EMAIL in
+    // src/lib/stores/userProfile.ts. Needed so this exact account can always create its own
+    // admin profile even before the `users` collection has a single document in it; every
+    // other admin check below requires a profile to already exist to prove you're an admin,
+    // so without this escape hatch no one could ever become the first admin.
+    function isBootstrapAdminEmail() {
+      return isSignedIn() && request.auth.token.email == 'admin@admin.com';
+    }
+
+    function hasProfile() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Only call after hasProfile() has short-circuited true — get() on a missing doc fails
+    // rule evaluation, so every caller below checks hasProfile()/isBootstrapAdminEmail() first
+    // via && / || short-circuiting rather than calling this unconditionally.
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrapAdminEmail() ||
+        (hasProfile() && myProfile().role == 'admin' && myProfile().isActive == true)
+      );
+    }
+
+    // Any signed-in user whose profile either doesn't exist yet (self-heals to an active
+    // 'user' profile on next login — see loadUserProfile in the app) or is explicitly active.
+    // Deactivated accounts (isActive == false) are blocked here at the data layer, not just
+    // signed back out client-side on their next auth-state check.
+    function isActiveUser() {
+      return isSignedIn() && (
+        isBootstrapAdminEmail() ||
+        !hasProfile() ||
+        myProfile().isActive == true
+      );
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // An admin can create anyone's profile with any role. Otherwise you may only create your
+      // OWN profile document (self-bootstrap on first login), and only with the exact role/
+      // isActive values the app's own bootstrap logic would assign — role:'admin' if and only
+      // if your token's email is the hardcoded bootstrap admin, role:'user' + isActive:true
+      // otherwise. Without this content constraint, any authenticated user could self-create
+      // users/{their-own-uid} with role:'admin' directly via the SDK, bypassing the app
+      // entirely — Firestore rules only see the resulting document, not which client code path
+      // produced it.
+      allow create: if isAdmin() || (
+        request.auth.uid == userId &&
+        request.resource.data.isActive == true &&
+        (isBootstrapAdminEmail()
+          ? request.resource.data.role == 'admin'
+          : request.resource.data.role == 'user')
+      );
+
+      // Admins can change anything. Users may update their own profile (e.g. display name) but
+      // not their own role or active status — otherwise self-promotion / self-reactivation
+      // would defeat the point of both.
+      allow update: if isAdmin() || (
+        request.auth.uid == userId &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.isActive == resource.data.isActive
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Reference/master data — every authenticated, active user needs full read/write here as
+    // part of normal day-to-day use (creating customers, items, chart-of-accounts entries,
+    // otherlist lookups including Cost Centers, etc.). See BLUEPRINT.md §3.1/§3.2.
+    match /listdatabase/{document=**} {
+      allow read, write: if isActiveUser();
+    }
+
+    // Transactions: any active user can read/create/update as part of normal business use
+    // (posting invoices, receipts, APVs, ...) — only delete is admin-only, matching the new
+    // Reset Transactions tool and, as a side effect, closing off the single-record delete every
+    // transaction list page already exposes to any authenticated user today (see BLUEPRINT.md
+    // §4.1 "Hard delete only, everywhere" — that UI button still renders for non-admins, it
+    // will just now fail server-side instead of actually deleting anything).
+    match /transactions/{document=**} {
+      allow read, create, update: if isActiveUser();
+      allow delete: if isAdmin();
+    }
+
+    // Inventory Adjustment's outlier root collection (see BLUEPRINT.md §2.2/§3) — same
+    // read/write policy as transactions above.
+    match /inventory/{document=**} {
+      allow read, create, update: if isActiveUser();
+      allow delete: if isAdmin();
     }
   }
 }

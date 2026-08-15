@@ -16,7 +16,7 @@
   import { goto } from '$app/navigation';
   import FireTable from '$lib/components/FireTable.svelte';
   import { deleteDocFromCollection } from '$lib/utils/firestoreCrud';
-  import { getFirestore, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+  import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
   import { app } from '$lib/utils/firebase';
 
   // Props for collection path
@@ -208,38 +208,44 @@
       const totalSnapshot = await getDocs(totalQuery);
       totalCount = totalSnapshot.size;
       
-      // Count posted documents
-      const postedQuery = query(collRef, where(statusField, '==', 'posted'));
+      // Count posted documents. Every transaction form actually saves Title-Case 'Posted'/'Draft'
+      // statuses (see each form's handleSave / accountingService.ts) — querying lowercase
+      // 'posted'/'draft' (the previous behavior) never matched anything, so these two cards
+      // always read 0.
+      const postedQuery = query(collRef, where(statusField, '==', 'Posted'));
       const postedSnapshot = await getDocs(postedQuery);
       postedCount = postedSnapshot.size;
-      
+
       // Count draft documents
-      const draftQuery = query(collRef, where(statusField, '==', 'draft'));
+      const draftQuery = query(collRef, where(statusField, '==', 'Draft'));
       const draftSnapshot = await getDocs(draftQuery);
       draftCount = draftSnapshot.size;
-      
+
       // If this is an invoice or APV type document that has pending/overdue states
       if ((documentType === 'invoice' || documentType === 'apv' || documentType === 'receipt' || documentType === 'payment') && summaryCards.length > 3) {
-        // Count pending documents (posted but not paid)
-        const pendingQuery = query(collRef, where(statusField, '==', 'posted'), where(isPaidField, '==', false));
-        const pendingSnapshot = await getDocs(pendingQuery);
-        pendingCount = pendingSnapshot.size;
-        
-        // Count overdue documents (current date > due date)
+        // "Pending" = has an open balance: not a draft, not fully paid. No transaction form ever
+        // writes the isPaidField boolean this used to check (so it was always false/absent and
+        // this card always read 0 too) — instead treat any non-draft, non-'paid' status as still
+        // owing money, the same convention Receive Payment's own outstanding-invoice lookup uses.
+        // This covers Sales Invoice's Unpaid/Partially Paid and APV's Posted/Partially Paid alike.
         const now = new Date();
+        let pending = 0;
         let overdue = 0;
-        
-        // We need to manually check for overdue status since Firestore can't do date comparisons
+
         totalSnapshot.docs.forEach(doc => {
           const data = doc.data();
-          if (data[dueDateField] && data[statusField] === 'posted' && !data[isPaidField]) {
+          const status = String(data[statusField] || '').toLowerCase();
+          if (status === 'draft' || status === 'paid') return;
+
+          pending++;
+
+          if (data[dueDateField]) {
             const dueDate = data[dueDateField].toDate ? data[dueDateField].toDate() : new Date(data[dueDateField]);
-            if (dueDate < now) {
-              overdue++;
-            }
+            if (dueDate < now) overdue++;
           }
         });
-        
+
+        pendingCount = pending;
         overdueCount = overdue;
       }
     } catch (error) {
@@ -289,51 +295,44 @@
     }
   }
   
-  // Update query options when search or filter changes
+  // Update query options when status/date filter changes. Search is deliberately NOT part of
+  // this Firestore query \u2014 see FireTable.svelte's searchTerm/searchKeys props for why (a
+  // server-side range query is case-sensitive/prefix-only, and combining it with the where()
+  // clauses below would need a composite Firestore index that doesn't exist here).
   $: {
-    // Start with base query options
-    let baseOptions = [...queryOptions];
     const updatedOptions = [];
-    
+
     // Apply status filter if not 'All Statuses'
     if (statusFilter && statusFilter !== 'All Statuses') {
       // Convert UI friendly status to database format
       const dbStatus = statusFilter.toLowerCase();
       updatedOptions.push(where(statusField, '==', dbStatus));
     }
-    
+
     // Apply date filter if not 'All Time'
     if (dateFilter && dateFilter !== 'All Time') {
       const dateRange = getDateRange(dateFilter);
       if (dateRange) {
         // Find date field (transaction date, posting date, etc.)
-        const dateField = columns.find(col => 
-          col.key.toLowerCase().includes('date') && 
+        const dateField = columns.find(col =>
+          col.key.toLowerCase().includes('date') &&
           !col.key.toLowerCase().includes('due'))?.key || 'date';
-          
+
         updatedOptions.push(where(dateField, '>=', dateRange.start));
         updatedOptions.push(where(dateField, '<=', dateRange.end));
       }
     }
-    
-    // Apply search term if not empty
-    if (searchTerm && searchTerm.trim() !== '') {
-      // Find searchable columns (typically document number, reference, or customer/vendor name)
-      const searchableColumns = columns
-        .filter(col => [
-          'number', 'reference', 'name', 'customer', 'vendor', 'description'
-        ].some(searchField => col.key.toLowerCase().includes(searchField)))
-        .map(col => col.key);
-        
-      if (searchableColumns.length > 0) {
-        updatedOptions.push(where(searchableColumns[0], '>=', searchTerm));
-        updatedOptions.push(where(searchableColumns[0], '<=', searchTerm + '\uf8ff'));
-        updatedOptions.push(orderBy(searchableColumns[0]));
-      }
-    }
-    
-    filteredQueryOptions = updatedOptions.length > 0 ? updatedOptions : baseOptions;
+
+    filteredQueryOptions = updatedOptions.length > 0 ? updatedOptions : [...queryOptions];
   }
+
+  // Columns whose values are reasonable to search across (document #, reference, name, etc.) \u2014
+  // matched client-side in FireTable against the already-loaded rows.
+  $: searchKeys = columns
+    .filter(col => [
+      'number', 'reference', 'name', 'customer', 'vendor', 'description'
+    ].some(searchField => col.key.toLowerCase().includes(searchField)))
+    .map(col => col.key);
 </script>
 
 <div class="flex flex-col h-full w-full">
@@ -446,6 +445,8 @@
       {subCollectionName}
       {columns}
       queryOptions={filteredQueryOptions}
+      {searchTerm}
+      {searchKeys}
     >
       <svelte:fragment slot="actions" let:row>
         {#if viewButtonPath}

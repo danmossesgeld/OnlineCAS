@@ -1,6 +1,7 @@
 import { getDocFromCollection, queryCollectionDocs, type FilterCondition } from './firestoreCrud';
 import type { WhereFilterOp } from 'firebase/firestore';
 import { formatCurrency, formatDate } from './formatters';
+import { getAccountCategory } from './accountTypes';
 
 /**
  * Account types in the Chart of Accounts
@@ -180,10 +181,19 @@ export async function getAccountBalances(dateRange: DateRange): Promise<AccountB
     
     // Initialize all accounts with zero balances
     accounts.forEach(account => {
-      // Determine normal balance for the account type
+      // Determine normal balance for the account type. account.accountType may be one of the
+      // 6 broad legacy values this switch expects directly, OR (far more likely for any account
+      // actually created through the Chart of Accounts form today) one of the granular
+      // QuickBooks-style values — 'accounts-payable', 'bank', 'other-current-liability', etc. —
+      // that never equal AccountType.Liability/.Asset/etc. by string comparison. Resolving
+      // through getAccountCategory() first maps either shape down to the same 6 broad values
+      // this switch already handles, so a Liability-category account can't silently fall through
+      // to the Debit default and get its balance sign inverted in every report. See
+      // accountTypes.ts for the full taxonomy.
+      const category = getAccountCategory(account.accountType);
       let normalBalance = NormalBalance.Debit;
-      
-      switch (account.accountType) {
+
+      switch (category) {
         case AccountType.Asset:
         case AccountType.Expense:
         case AccountType.Cogs:
@@ -195,12 +205,12 @@ export async function getAccountBalances(dateRange: DateRange): Promise<AccountB
           normalBalance = NormalBalance.Credit;
           break;
       }
-      
+
       accountBalances[account.name] = {
         accountId: account.id,
         accountCode: account.code,
         accountName: account.name,
-        accountType: account.accountType as AccountType,
+        accountType: category as AccountType,
         fsClassification: account.fsClassification as FSClassification,
         debit: 0,
         credit: 0,

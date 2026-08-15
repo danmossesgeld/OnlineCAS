@@ -8,6 +8,7 @@ import { quintOut } from 'svelte/easing';
 import { page } from '$app/stores';
 import { onMount } from 'svelte';
 import ThemeToggle from './ThemeToggle.svelte';
+import { isAdmin } from '../stores/userProfile';
 
 // Sidebar states
 let collapsed = false;
@@ -26,6 +27,7 @@ let accountingOpen = false;
 let masterlistOpen = false;
 let otherlistOpen = false;
 let reportsOpen = false;
+let adminToolsOpen = false;
 
 // Check if a path is active (for highlighting current page)
 function isActive(path: string): boolean {
@@ -1086,10 +1088,105 @@ function updateViewportHeight() {
                   {/if}
                 </a>
               </li>
+              <li>
+                <a
+                  href="/otherlist/costcenters"
+                  class="flex items-center transition-all duration-200 group"
+                  style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/otherlist/costcenters') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                  on:click|preventDefault={() => handleNav('/otherlist/costcenters')}
+                >
+                  <iconify-icon
+                    icon="material-symbols:account-tree"
+                    width="16"
+                    height="16"
+                    class="mr-2 transition-colors duration-200"
+                    style="color: {isActive('/otherlist/costcenters') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                  ></iconify-icon>
+                  <span style="font-weight: var(--font-medium);">Cost Centers</span>
+                  {#if isActive('/otherlist/costcenters')}
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                  {/if}
+                </a>
+              </li>
             </ul>
           </div>
         {/if}
       </li>
+
+      {#if $isAdmin}
+        <li>
+          <button
+            type="button"
+            class="nav-item flex items-center w-full transition-all duration-200 group"
+            style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: var(--font-medium); {adminToolsOpen ? 'background: linear-gradient(135deg, var(--color-error-50), var(--color-error-100)); color: var(--color-error-700); box-shadow: var(--shadow-sm);' : 'color: var(--color-neutral-700);'}"
+            on:click={() => adminToolsOpen = !adminToolsOpen}
+            aria-expanded={adminToolsOpen}
+          >
+            <iconify-icon
+              icon="material-symbols:shield-person"
+              width="20"
+              height="20"
+              class="mr-3 transition-colors duration-200"
+              style="color: {adminToolsOpen ? 'var(--color-error-600)' : 'var(--color-neutral-500)'}"
+            ></iconify-icon>
+            <span>Admin Tools</span>
+            <iconify-icon
+              icon="material-symbols:chevron-right-rounded"
+              width="18"
+              height="18"
+              class="ml-auto transform transition-transform duration-200 {adminToolsOpen ? 'rotate-90' : ''}"
+              style="color: {adminToolsOpen ? 'var(--color-error-600)' : 'var(--color-neutral-400)'}"
+            ></iconify-icon>
+          </button>
+
+          {#if adminToolsOpen}
+            <div transition:slide={{duration: 200, easing: quintOut}}>
+              <ul class="nav-dropdown" style="padding-left: var(--space-4); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
+                <li>
+                  <a
+                    href="/admin/users"
+                    class="flex items-center transition-all duration-200 group"
+                    style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/admin/users') ? 'background: var(--color-primary-100); color: var(--color-primary-700);' : 'color: var(--color-neutral-600);'}"
+                    on:click|preventDefault={() => handleNav('/admin/users')}
+                  >
+                    <iconify-icon
+                      icon="material-symbols:manage-accounts"
+                      width="16"
+                      height="16"
+                      class="mr-2 transition-colors duration-200"
+                      style="color: {isActive('/admin/users') ? 'var(--color-primary-600)' : 'var(--color-neutral-400)'}"
+                    ></iconify-icon>
+                    <span style="font-weight: var(--font-medium);">User Management</span>
+                    {#if isActive('/admin/users')}
+                      <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-primary-500);"></div>
+                    {/if}
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/admin/resetTransactions"
+                    class="flex items-center transition-all duration-200 group"
+                    style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); {isActive('/admin/resetTransactions') ? 'background: var(--color-error-100); color: var(--color-error-700);' : 'color: var(--color-neutral-600);'}"
+                    on:click|preventDefault={() => handleNav('/admin/resetTransactions')}
+                  >
+                    <iconify-icon
+                      icon="material-symbols:warning"
+                      width="16"
+                      height="16"
+                      class="mr-2 transition-colors duration-200"
+                      style="color: {isActive('/admin/resetTransactions') ? 'var(--color-error-600)' : 'var(--color-neutral-400)'}"
+                    ></iconify-icon>
+                    <span style="font-weight: var(--font-medium);">Reset Transactions</span>
+                    {#if isActive('/admin/resetTransactions')}
+                      <div class="ml-auto w-1.5 h-1.5 rounded-full" style="background: var(--color-error-500);"></div>
+                    {/if}
+                  </a>
+                </li>
+              </ul>
+            </div>
+          {/if}
+        </li>
+      {/if}
     </ul>
   </nav>
   

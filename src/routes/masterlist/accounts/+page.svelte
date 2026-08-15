@@ -8,6 +8,7 @@
   import { createFirestoreOptionsStore } from '$lib/utils/firestoreOptions';
   import { parseCSVToRecords } from '$lib/utils/csvParser';
   import { exportNestedFirestoreCollectionToCSV, type ExportColumn } from '$lib/utils/csvExporter';
+  import { ACCOUNT_TYPES, getAccountTypeDef, formatAccountType } from '$lib/utils/accountTypes';
 
   // Define account type
   type AccountType = {
@@ -80,15 +81,11 @@
   const subtitle = 'Manage your Chart of Accounts';
   const primaryColorClass = 'indigo';
 
-  // Account types based on the Laravel documentation
-  const accountTypes = [
-    { label: 'Asset', code: 'ASSET', value: 'asset', category: 'Asset', normalBalance: 'debit' },
-    { label: 'Liability', code: 'LIAB', value: 'liability', category: 'Liability', normalBalance: 'credit' },
-    { label: 'Equity', code: 'EQTY', value: 'equity', category: 'Equity', normalBalance: 'credit' },
-    { label: 'Revenue', code: 'REV', value: 'revenue', category: 'Revenue', normalBalance: 'credit' },
-    { label: 'Expense', code: 'EXP', value: 'expense', category: 'Expense', normalBalance: 'debit' },
-    { label: 'Cost of Goods Sold', code: 'COGS', value: 'cogs', category: 'Expense', normalBalance: 'debit' }
-  ];
+  // Account types: see src/lib/utils/accountTypes.ts (ACCOUNT_TYPES) — the standard,
+  // QuickBooks-style granular taxonomy (Bank, Accounts Receivable, Other Current Asset, Fixed
+  // Asset, Accounts Payable, ...), not the old 6-value asset/liability/equity/revenue/expense/
+  // cogs set. That old set undersold what a real Chart of Accounts needs and didn't recognize
+  // this app's own existing account data, which already used QuickBooks-style values.
 
   // Financial statement classifications.
   // These values must match reportingService.ts's FSClassification enum exactly (kebab-case) —
@@ -206,7 +203,15 @@
       color: 'outline',
       icon: 'material-symbols:description',
       onClick: () => {
-        const sample = 'code,name,description,accountType,fsClassification,glCode,glName,slCode,slName,parentId,isActive,isSystem\n1000,Current Assets,Current asset accounts,asset,current-asset,100,Current Assets,,,,,true,false\n1010,Cash and Cash Equivalents,Cash accounts,asset,current-asset,101,Cash,,,1000,true,false\n1011,Cash on Hand,Physical cash in office,asset,current-asset,1011,Petty Cash,,,1010,true,false\n1012,Cash in Bank - BPI,Main operating account,asset,current-asset,1012,BPI Checking,,,1010,true,false\n1020,Accounts Receivable,Customer receivables,asset,current-asset,102,A/R,,,1000,true,false\n2000,Current Liabilities,Current liability accounts,liability,current-liability,200,Current Liab,,,,,true,false\n2010,Accounts Payable,Vendor payables,liability,current-liability,201,A/P,,,2000,true,false\n3000,Owner Equity,Equity accounts,equity,equity,300,Equity,,,,,true,false\n4000,Revenue,Income accounts,revenue,revenue,400,Revenue,,,,,true,false\n4010,Sales Revenue,Product sales,revenue,revenue,401,Sales,,,4000,true,false\n5000,Operating Expenses,Business expenses,expense,operating-expense,500,Expenses,,,,,true,false\n5010,Office Supplies,Office supply expenses,expense,operating-expense,501,Supplies,,,5000,true,false';
+        // Every top-level (no-parent) row below must have exactly 12 comma-separated fields,
+        // matching the 12-column header — these rows previously had 13 (one extra blank before
+        // isActive/isSystem), which silently shifted isActive to '' and isSystem's value to
+        // 'true' on import for every root account (Current Assets, Current Liabilities, Owner
+        // Equity, Revenue, Operating Expenses), permanently disabling their Edit/Delete buttons
+        // (both gated on isSystem, see the additionalActions slot below) with no visible reason
+        // why. Child rows (with a parentId) were never affected — only rows with no parentId,
+        // where the missing value plus the pre-existing extra blank added up to one too many.
+        const sample = 'code,name,description,accountType,fsClassification,glCode,glName,slCode,slName,parentId,isActive,isSystem\n1000,Current Assets,Current asset accounts,asset,current-asset,100,Current Assets,,,,true,false\n1010,Cash and Cash Equivalents,Cash accounts,asset,current-asset,101,Cash,,,1000,true,false\n1011,Cash on Hand,Physical cash in office,asset,current-asset,1011,Petty Cash,,,1010,true,false\n1012,Cash in Bank - BPI,Main operating account,asset,current-asset,1012,BPI Checking,,,1010,true,false\n1020,Accounts Receivable,Customer receivables,asset,current-asset,102,A/R,,,1000,true,false\n2000,Current Liabilities,Current liability accounts,liability,current-liability,200,Current Liab,,,,true,false\n2010,Accounts Payable,Vendor payables,liability,current-liability,201,A/P,,,2000,true,false\n3000,Owner Equity,Equity accounts,equity,equity,300,Equity,,,,true,false\n4000,Revenue,Income accounts,revenue,revenue,400,Revenue,,,,true,false\n4010,Sales Revenue,Product sales,revenue,revenue,401,Sales,,,4000,true,false\n5000,Operating Expenses,Business expenses,expense,operating-expense,500,Expenses,,,,true,false\n5010,Office Supplies,Office supply expenses,expense,operating-expense,501,Supplies,,,5000,true,false';
         const blob = new Blob([sample], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -293,18 +298,17 @@
       }
     },
     { label: 'Type', key: 'accountType', width: '12%', render: (row: any) => `<span style=\"${rowTextStyle}\">${formatAccountType(row.accountType)}</span>` },
-    { label: 'Normal Balance', key: 'accountType', width: '12%', render: (row: any) => `<span style=\"${rowTextStyle}\">${accountTypes.find(t => t.value === row.accountType)?.normalBalance || ''}</span>` },
+    { label: 'Normal Balance', key: 'accountType', width: '12%', render: (row: any) => `<span style=\"${rowTextStyle}\">${getAccountTypeDef(row.accountType)?.normalBalance || ''}</span>` },
     { label: 'Classification', key: 'fsClassification', width: '16%', render: (row: any) => `<span style=\"${rowTextStyle}\">${formatClassification(row.fsClassification)}</span>` },
     { label: 'GL Code', key: 'glCode', width: '8%' },
     { label: 'Parent', key: 'parentName', width: '10%', render: (row: any) => `<span style=\"${rowTextStyle}\">${row.parentName || '-'}</span>` },
     { label: 'Status', key: 'isActive', width: '8%', render: (row: any) => `<span style=\"${rowTextStyle}\">${row.isActive ? 'Active' : 'Inactive'}</span>` }
   ];
 
-  // Format account type for display
-  function formatAccountType(value: string): string {
-    const accountType = accountTypes.find(type => type.value === value);
-    return accountType ? accountType.label : value;
-  }
+  // formatAccountType is imported from $lib/utils/accountTypes — see the import at the top of
+  // this file. (A local re-definition of the same name used to live here, referencing the now-
+  // removed local accountTypes array; removed so the shared, taxonomy-aware version is what
+  // actually runs.)
 
   // Format classification for display
   function formatClassification(value: string): string {
@@ -320,7 +324,9 @@
     errorMsg = '';
   }
 
-  // Handle editing an item
+  // Handle editing an item. isSystem does not block editing — the user has full control over
+  // the Chart of Accounts, including accounts the app itself created (e.g. reportingService.ts's
+  // auto-plugged "Retained Earnings" account). isSystem is purely informational here.
   function handleEdit(item: AccountItem) {
     editingItem = { ...item };
     // Convert AccountItem to FormData with proper type handling
@@ -347,11 +353,9 @@
 
   // Handle deleting an item
   async function handleDelete(item: AccountItem): Promise<void> {
-    if (item.isSystem) {
-      alert('System accounts cannot be deleted.');
-      return;
-    }
-
+    // isSystem does not block deletion — full user control over the Chart of Accounts. If a
+    // deleted account is one the app relies on (e.g. the auto-plugged "Retained Earnings"
+    // account, reportingService.ts), it gets recreated automatically the next time it's needed.
     if (confirm(`Are you sure you want to delete ${item.name}?`)) {
       try {
         await deleteDocFromCollection(collectionPath, item.id);
@@ -431,9 +435,9 @@
       label: 'Account Type*', 
       name: 'accountType', 
       type: 'select', 
-      options: accountTypes.map(t => ({ 
-        value: t.value, 
-        label: `${t.label} (${t.category}, ${t.normalBalance})` 
+      options: ACCOUNT_TYPES.map(t => ({
+        value: t.value,
+        label: `${t.label} (${t.normalBalance === 'debit' ? 'Dr' : 'Cr'})`
       })),
       required: true
     },
@@ -455,12 +459,12 @@
     { label: 'SL Code', name: 'slCode', type: 'text' },
     { label: 'SL Name', name: 'slName', type: 'text' },
     { label: 'Active Account', name: 'isActive', type: 'checkbox', default: true },
-    { 
-      label: 'System Account', 
-      name: 'isSystem', 
-      type: 'checkbox', 
-      disabled: !(editingItem && editingItem.isSystem)
-    }
+    // isSystem is purely informational (see handleEdit/handleDelete) — full user control means
+    // this checkbox is freely editable on any account, new or existing. It previously carried a
+    // disabled config meant to restrict it to already-system accounts, but ModalForm.svelte
+    // never actually reads a field's `disabled` property for any field type, so that config had
+    // no real effect either way — removed rather than leave misleading dead config in place.
+    { label: 'System Account', name: 'isSystem', type: 'checkbox' }
   ];
 </script>
 
@@ -479,19 +483,23 @@
     allowDelete={false}
   >
     <svelte:fragment slot="additionalActions" let:row>
-      <button 
-        class="btn btn-ghost btn-xs" 
-        on:click={() => handleEdit(row)} 
-        disabled={row.isSystem}
+      <!-- isSystem never blocks Edit/Delete — the user has full control over the Chart of
+           Accounts. (It used to hard-disable both buttons with no visible reason why, which
+           was indistinguishable from "broken," and permanently stuck any account incorrectly
+           flagged isSystem — e.g. by the CSV column-shift bug fixed above.) -->
+      <button
+        class="btn btn-ghost btn-xs"
+        on:click={() => handleEdit(row)}
         aria-label="Edit account"
+        title="Edit account"
       >
         <iconify-icon icon="material-symbols:edit-outline" width="20" height="20"></iconify-icon>
       </button>
-      <button 
-        class="btn btn-ghost btn-xs" 
-        on:click={() => handleDelete(row)} 
-        disabled={row.isSystem}
+      <button
+        class="btn btn-ghost btn-xs"
+        on:click={() => handleDelete(row)}
         aria-label="Delete account"
+        title="Delete account"
       >
         <iconify-icon icon="material-symbols:delete-outline" width="20" height="20"></iconify-icon>
       </button>
